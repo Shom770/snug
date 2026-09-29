@@ -1,0 +1,18 @@
+{
+  "name": "snug-backend",
+  "private": true,
+  "scripts": {
+    "deploy": "uv run pywrangler deploy",
+    "preview": "uv run python scripts/secrets.py --local && uv run pywrangler dev",
+    "secrets": "uv run python scripts/secrets.py",
+    "db:migrate": "wrangler d1 migrations apply snug --remote",
+    "db:migrate:local": "wrangler d1 migrations apply snug --local",
+    "db:import": "uv run python scripts/export_data.py && wrangler d1 execute snug --remote --file=data.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

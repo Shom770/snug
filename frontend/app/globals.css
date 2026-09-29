@@ -1,0 +1,22 @@
+*{box-sizing:border-box}
+html,body{margin:0;height:auto;overflow-y:auto;background:#f3ede1;color:#1f1b2e;font-family:'Rethink Sans',sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;margin:0;border:none;background:none;padding:0;cursor:pointer}
+a{color:#1f1b2e}
+a:hover{color:#4f6fae}
+
+/* hanging wooden signs you can click (the place sign, sign out): swing on their ropes, brighten and lift on hover */
+@keyframes snug-swing { 0% { transform: rotate(0) } 25% { transform: rotate(3.5deg) } 55% { transform: rotate(-2.5deg) } 80% { transform: rotate(1deg) } 100% { transform: rotate(0) } }
+.snug-hang { transform-origin: 50% 0; cursor: pointer; }
+.snug-hang:hover { animation: snug-swing .7s ease-in-out; }
+.snug-hang .snug-plank { transition: transform .15s, filter .15s; }
+.snug-hang:hover .snug-plank { transform: translateY(-3px) scale(1.06); filter: brightness(1.15) drop-shadow(0 0 7px rgba(255,226,150,0.95)) drop-shadow(0 5px 0 rgba(46,26,12,0.45)); }
+.snug-hang:active .snug-plank { transform: translateY(1px); filter: brightness(0.95); }
+@media (prefers-reduced-motion: reduce) { .snug-hang:hover { animation: none; } }
+
+/* the place sign gives the snug board room on small phones */
+@media (max-width: 400px) { .snug-place-face { font-size: 13px !important; padding: 6px 10px !important; gap: 5px !important; } }
+
+/* the sign-in plank under the welcome board: a slow, barely-there sway */
+@keyframes snug-sway-soft { 0%, 100% { transform: rotate(-0.9deg) } 50% { transform: rotate(0.9deg) } }
+.snug-sway-soft { transform-origin: 50% 0; animation: snug-sway-soft 4.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .snug-sway-soft { animation: none; } }

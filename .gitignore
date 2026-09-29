@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.env
+.env*.local
+.venv
+__pycache__
+backend/snug.db*
+frontend/out
+backend/python_modules
+backend/.venv-workers
+backend/.wrangler
+backend/.dev.vars
+backend/data.sql
