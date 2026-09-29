@@ -1,27 +1,42 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "snug",
-  "main": "src/entry.py",
-  "compatibility_date": "2026-09-01",
-  "compatibility_flags": ["python_workers"],
-
-  // the Next.js site, exported as static files (npm run build:web). Everything is served from here,
-  // except /backend/*, which runs the Python Worker (FastAPI).
-  "assets": {
-    "directory": "../frontend/out",
-    "not_found_handling": "404-page",
-    "run_worker_first": ["/backend/*"]
-  },
-
-  // people, sessions, preferences, forecasts, tune picks, check-ins. Create it with
-  // `npx wrangler d1 create snug` and paste the database_id it prints here.
-  "d1_databases": [
-    { "binding": "DB", "database_name": "snug", "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID", "migrations_dir": "migrations" }
-  ],
-
-  // OPENROUTER_KEY, GOOGLE_CLIENT_ID, NWS_USER_AGENT (and optional JEV_MODEL) are secrets, copied from the
-  // repo-root .env by `npm run secrets`
-  "vars": { "SNUG_ENV": "production" },
-
-  "observability": { "enabled": true }
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "snug",
+	"main": "src/entry.py",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": [
+		"python_workers"
+	],
+	// the Next.js site, exported as static files (npm run build:web). Everything is served from here,
+	// except /backend/*, which runs the Python Worker (FastAPI).
+	"assets": {
+		"directory": "../frontend/out",
+		"not_found_handling": "404-page",
+		"run_worker_first": [
+			"/backend/*"
+		]
+	},
+	// people, sessions, preferences, forecasts, tune picks, check-ins. Create it with
+	// `npx wrangler d1 create snug` and paste the database_id it prints here.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "snug",
+			"database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "snug",
+			"database_name": "snug",
+			"database_id": "9949299b-7439-4f21-9409-6f454d10c53c",
+			"remote": true
+		}
+	],
+	// OPENROUTER_KEY, GOOGLE_CLIENT_ID, NWS_USER_AGENT (and optional JEV_MODEL) are secrets, copied from the
+	// repo-root .env by `npm run secrets`
+	"vars": {
+		"SNUG_ENV": "production"
+	},
+	"observability": {
+		"enabled": true
+	}
 }
