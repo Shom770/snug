@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -77,7 +77,11 @@ async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
     res.raise_for_status()
     r = res.json()
     c, h = r['current'], r['hourly']
-    i0 = next((i for i, t in enumerate(h['time']) if t >= c['time'][:13]), 0)
+    # the current hour at the place by its clock; the 'current' reading is on a 15-minute step and can still be
+    # from the previous hour just after it turns
+    local_now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=r.get('utc_offset_seconds', 0))
+    hour_now = max(local_now.strftime('%Y-%m-%dT%H'), c['time'][:13])
+    i0 = next((i for i, t in enumerate(h['time']) if t >= hour_now), 0)
     hourly = [
         _hour(h['time'][i], h['weather_code'][i], h['temperature_2m'][i], h['apparent_temperature'][i], h['relative_humidity_2m'][i],
               h['wind_speed_10m'][i], h['wind_gusts_10m'][i], h['cloud_cover'][i], h['precipitation'][i], h['precipitation_probability'][i],
@@ -88,11 +92,12 @@ async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
     now = _hour(c['time'], c['weather_code'], c['temperature_2m'], c['apparent_temperature'], c['relative_humidity_2m'],
                 c['wind_speed_10m'], c['wind_gusts_10m'], c['cloud_cover'], c['precipitation'], 0,
                 (c['cloud_cover_low'], c['cloud_cover_mid'], c['cloud_cover_high']))
-    now = now.model_copy(update={'pop': hourly[0].pop})  # the live reading has no chance-of-rain; take the hour's
+    # the live reading has no chance-of-rain (take the hour's), and its hour label may lag behind the clock
+    now = now.model_copy(update={'pop': hourly[0].pop, 'hour': hourly[0].hour})
     hourly[0] = now
     temps = [x.temp for x in hourly]
     return Weather(
-        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=c['time'], dir=c['wind_direction_10m'], night=c['is_day'] == 0,
+        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=max(c['time'], hour_now + ':00'), dir=c['wind_direction_10m'], night=c['is_day'] == 0,
         lo=round(min(r['daily']['temperature_2m_min'][0], *temps), 1), hi=round(max(r['daily']['temperature_2m_max'][0], *temps), 1),
         hourly=hourly, source='open-meteo',
     )

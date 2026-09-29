@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import AccountMenu from '../components/AccountMenu';
@@ -16,6 +16,7 @@ const Snug = dynamic(() => import('../components/Snug'), { ssr: false });
 // but only briefly when it's this hour's cached forecast (seen it already)
 const MIN_LOADING_MS = 3600;
 const MIN_LOADING_CACHED_MS = 1200;
+const hourKey = () => { const d = new Date(); return `${d.toDateString()} ${d.getHours()}`; };
 // used when someone skips the "where are you" step
 const FALLBACK_PLACE: Place = { name: 'Philadelphia, PA', lat: 39.9526, lon: -75.1652 };
 
@@ -51,6 +52,7 @@ export default function Home() {
   // 'onboard': the character step between picking a place and tuning; 'edit': opened from the 📍 menu
   const [character, setCharacter] = useState<'onboard' | 'edit' | 'shop' | null>(null);
   const [refresh, setRefresh] = useState(0); // bump to re-run the forecast (after tuning)
+  const loadedHour = useRef(''); // the hour the showing forecast was made in
   const authSlot = useSlot('[data-authslot]');
   const locSlot = useSlot('[data-locslot]');
 
@@ -97,6 +99,7 @@ export default function Home() {
           setForecastId(f.forecastId);
           setCheckin(f.checkin);
           setDone(true);
+          loadedHour.current = hourKey();
           return;
         } catch (e) {
           console.error(e);
@@ -107,6 +110,26 @@ export default function Home() {
     })();
     return () => { dead = true; };
   }, [showApp, place.lat, place.lon, place.name, user?.id, refresh]);
+
+  // Phones resume a backgrounded tab instead of reloading it, so coming back in a later hour would keep showing the
+  // old hour's 12-hour curve. When the page comes back into view in a new hour, forecast again.
+  useEffect(() => {
+    if (!showApp) return;
+    const check = () => {
+      if (document.visibilityState === 'visible' && loadedHour.current && loadedHour.current !== hourKey()) {
+        loadedHour.current = '';
+        setRefresh(r => r + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('pageshow', check);
+    window.addEventListener('focus', check);
+    return () => {
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('pageshow', check);
+      window.removeEventListener('focus', check);
+    };
+  }, [showApp]);
 
   // the evening check-in: how today actually felt, fed into future forecasts
   const onCheckin = useCallback(async ({ felt, fit }: { felt: number; fit: string | null }) => {
