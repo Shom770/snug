@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev",
+    "dev": "rm -rf .next-dev && next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "export": "rm -rf out && STATIC_EXPORT=1 next build"
+    "export": "rm -rf out .next && STATIC_EXPORT=1 next build"
   },
   "dependencies": {
     "next": "^14.2.35",

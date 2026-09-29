@@ -6,7 +6,7 @@
     "dev": "concurrently -k -n api,web -c magenta,cyan \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "cd backend && uv run uvicorn app.main:app --app-dir src --reload --reload-dir src --host 127.0.0.1 --port 8787",
     "dev:web": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run export",
+    "build": "npm --prefix frontend run export && bash backend/scripts/prepare.sh",
     "deploy": "npm run build && npm run deploy:worker",
     "deploy:worker": "bash backend/scripts/deploy.sh"
   },

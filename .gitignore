@@ -12,4 +12,7 @@ backend/.venv-workers
 backend/.wrangler
 backend/.dev.vars
 backend/data.sql
-.next-export
+.wrangler
+backend/src/vendor
+/python_modules
+.next-dev

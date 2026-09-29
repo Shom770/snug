@@ -47,7 +47,7 @@ origins** on the Google OAuth client, or the Google button won't open.
 run `npm --prefix backend run db:migrate:local` once first, after `npm run build`).
 
 **Deploying from Git** (Cloudflare Workers Builds): root directory `/`, build command `npm run build`,
-deploy command `npm run deploy:worker`. Commit `backend/wrangler.jsonc` with your real `database_id`.
+deploy command `npx wrangler deploy` (the default; the build leaves a config redirect pointing it at `backend/`). Commit `backend/wrangler.jsonc` with your real `database_id`.
 
 ## flow
 
