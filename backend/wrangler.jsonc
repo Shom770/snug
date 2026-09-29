@@ -6,6 +6,9 @@
 	"compatibility_flags": [
 		"python_workers"
 	],
+	// served on snugsky.com (a custom domain; keeping it here means a deploy never detaches it) and snug.<you>.workers.dev
+	"routes": [{ "pattern": "snugsky.com", "custom_domain": true }],
+	"workers_dev": true,
 	// the Next.js site, exported as static files (npm run build). Everything is served from here,
 	// except /backend/*, which runs the Python Worker (FastAPI).
 	"assets": {

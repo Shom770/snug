@@ -759,6 +759,20 @@ class Component extends DCLogic {
     root.querySelectorAll('[data-sway]').forEach(el=>{if(this._phase!=='ready')return;const lo=el.dataset.sway==='lo';const w=+(this.state.preset&&PRESETS[this.state.preset]?PRESETS[this.state.preset].wind:5)||5;el.style.transform=this.state.motion?'rotate('+(Math.sin(t*(lo?0.9:1.3))*Math.min(3.5,0.6+w*0.14)*(lo?0.25:1)).toFixed(2)+'deg)':'';});
     root.querySelectorAll('[data-bob]').forEach(el=>{el.style.transform=this.state.motion?'translateY('+(Math.abs(Math.sin(t*2.2))*-5).toFixed(1)+'px)':'';});
     root.querySelectorAll('img[data-wobble]').forEach(el=>{const w=+el.dataset.wobble||0;el.style.transform=this.state.motion?'rotate('+(Math.sin(t*(1.5+w*0.1))*Math.min(14,2+w*0.8)).toFixed(1)+'deg)':'';});
+    if((this._edgeN=(this._edgeN||0)+1)%15===1)try{this.syncEdges(root);}catch(e){}
+  }
+  // What shows past the top and bottom of the page when a phone rubber-bands: the sky's top row above (see the
+  // snug-edge-top block in globals.css) and the ground below, as CSS variables, so the scene looks like it keeps going.
+  syncEdges(root){
+    const doc=root.ownerDocument,de=doc.documentElement,sy=doc.defaultView.scrollY,H=de.scrollHeight;
+    const avg=(cv,y)=>{const ctx=cv.getContext('2d'),w=cv.width,d=ctx.getImageData(0,Math.max(0,Math.min(cv.height-1,y)),w,1).data;const px=[];for(let i=0;i<33;i++){const k=Math.floor((i+0.5)/33*w)*4;px.push([d[k],d[k+1],d[k+2]]);}px.sort((p,q)=>(p[0]+p[1]+p[2])-(q[0]+q[1]+q[2]));const m=px[16];return 'rgb('+m[0]+','+m[1]+','+m[2]+')';};  // the median, so a stray leaf or star doesn't tint it
+    let top=null,bottom=null;
+    root.querySelectorAll('canvas[data-scene]').forEach(cv=>{if(!cv.width)return;const r=cv.getBoundingClientRect(),y0=r.top+sy,y1=r.bottom+sy;
+      if(!top&&y0<=1&&r.width>=doc.defaultView.innerWidth*0.9)top=avg(cv,0);
+      if(!bottom&&y1>=H-1&&r.width>=doc.defaultView.innerWidth*0.9)bottom=avg(cv,cv.height-1);});
+    const m=root.querySelector('canvas[data-meadow]');if(m&&m.width&&m.height)bottom=avg(m,m.height-2);
+    if(top&&de.style.getPropertyValue('--snug-top')!==top)de.style.setProperty('--snug-top',top);
+    if(bottom&&de.style.getPropertyValue('--snug-bottom')!==bottom)de.style.setProperty('--snug-bottom',bottom);
   }
   async askWeather(text){if(!text.trim()||this.state.asking)return;this.setState({asking:true,askErr:''});
     const cl=window.claude||(window.parent&&window.parent.claude)||(window.top&&window.top.claude);

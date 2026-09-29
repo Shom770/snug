@@ -1,9 +1,10 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:auto;overflow-y:auto;background:#f3ede1;color:#1f1b2e;font-family:'Rethink Sans',sans-serif;-webkit-font-smoothing:antialiased}
-/* no rubber-band past the top or bottom (it showed a blank strip); where a browser still bounces, sky shows
-   above and forest below instead of the page colour */
-html{overscroll-behavior:none;background:linear-gradient(180deg,#4f88c6 0 50%,#2d3a2b 50% 100%) fixed}
-body{overscroll-behavior:none;min-height:100vh;min-height:100dvh}
+/* when a phone rubber-bands past the ends, the scene keeps going: the sky's colour above the page (this block sits
+   just above it) and the ground's below (the root background). The engine keeps both variables in sync with the scene. */
+html{background:var(--snug-bottom,#2d3a2b)}
+body{min-height:100vh;min-height:100dvh}
+.snug-edge-top{position:absolute;left:0;right:0;top:-120vh;height:120vh;background:var(--snug-top,#4f88c6);pointer-events:none}
 button{font:inherit;color:inherit;margin:0;border:none;background:none;padding:0;cursor:pointer}
 a{color:#1f1b2e}
 a:hover{color:#4f6fae}
