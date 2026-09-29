@@ -812,7 +812,7 @@ class Component extends DCLogic {
     setTimeout(()=>{this._ready=true;this.forceUpdate();},900);this.paint();this._iv=setInterval(()=>{if(this._phase!=='reveal')this.paint();this.panAB();},50);if(this._phase!=='ready')this.ldStart();
     setTimeout(()=>this.watchDress(),300);
     const w=this.win();
-    this._rs=()=>{const el=this.rootRef.current;if(!el)return;const doc=el.ownerDocument;const vw=doc.documentElement.clientWidth||el.clientWidth,vh=(doc.defaultView&&doc.defaultView.innerHeight)||doc.documentElement.clientHeight;if(vw&&(vw!==this.state.vw||vh!==this.state.vh))this.setState({vw,vh});};
+    this._rs=()=>{const el=this.rootRef.current;if(!el)return;const doc=el.ownerDocument;const vw=doc.documentElement.clientWidth||el.clientWidth;let vh=(doc.defaultView&&doc.defaultView.innerHeight)||doc.documentElement.clientHeight;if(vw===this.state.vw&&this.state.vh&&Math.abs(vh-this.state.vh)<160)vh=this.state.vh;if(vw&&(vw!==this.state.vw||vh!==this.state.vh))this.setState({vw,vh});};
     w.addEventListener('resize',this._rs);this._rs();setTimeout(this._rs,50);setTimeout(this._rs,400);
     if(w.ResizeObserver&&this.rootRef.current){this._ro=new w.ResizeObserver(()=>this._rs());this._ro.observe(this.rootRef.current);}
     this._st=()=>{};w.addEventListener('storage',this._st);
