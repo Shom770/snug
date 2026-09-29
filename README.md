@@ -44,7 +44,10 @@ Then add the site's URL (e.g. `https://snug.<you>.workers.dev`, or your custom d
 origins** on the Google OAuth client, or the Google button won't open.
 
 `npm --prefix backend run preview` runs the production build locally on Cloudflare's runtime (with a local D1:
-run `npm --prefix backend run db:migrate:local` once first, after `npm run build:web`).
+run `npm --prefix backend run db:migrate:local` once first, after `npm run build`).
+
+**Deploying from Git** (Cloudflare Workers Builds): root directory `/`, build command `npm run build`,
+deploy command `npm run deploy:worker`. Commit `backend/wrangler.jsonc` with your real `database_id`.
 
 ## flow
 

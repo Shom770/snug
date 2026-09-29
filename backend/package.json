@@ -2,7 +2,7 @@
   "name": "snug-backend",
   "private": true,
   "scripts": {
-    "deploy": "uv run pywrangler deploy",
+    "deploy": "bash scripts/deploy.sh",
     "preview": "uv run python scripts/secrets.py --local && uv run pywrangler dev",
     "secrets": "uv run python scripts/secrets.py",
     "db:migrate": "wrangler d1 migrations apply snug --remote",

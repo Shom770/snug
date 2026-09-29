@@ -2,7 +2,7 @@
 // STATIC_EXPORT=1 (npm run export) builds plain files into out/ for Cloudflare, where the Worker serves /backend/*
 // itself. In dev, /backend/* is proxied to the local FastAPI so the browser stays same-origin either way.
 const nextConfig = process.env.STATIC_EXPORT
-  ? { reactStrictMode: false, output: 'export', images: { unoptimized: true } }
+  ? { reactStrictMode: false, output: 'export', images: { unoptimized: true }, distDir: '.next-export' } // own build dir, so a running `next dev` keeps working
   : {
       reactStrictMode: false,
       async rewrites() {

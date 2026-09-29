@@ -2,13 +2,13 @@
   "name": "snug-dev",
   "private": true,
   "scripts": {
-    "postinstall": "npm --prefix frontend install && npm --prefix backend install && cd backend && uv sync",
+    "postinstall": "npm --prefix frontend install && npm --prefix backend install",
     "dev": "concurrently -k -n api,web -c magenta,cyan \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "cd backend && uv run uvicorn app.main:app --app-dir src --reload --reload-dir src --host 127.0.0.1 --port 8787",
     "dev:web": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "build:web": "npm --prefix frontend run export",
-    "deploy": "npm run build:web && npm --prefix backend run deploy"
+    "build": "npm --prefix frontend run export",
+    "deploy": "npm run build && npm run deploy:worker",
+    "deploy:worker": "bash backend/scripts/deploy.sh"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

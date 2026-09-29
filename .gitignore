@@ -12,3 +12,4 @@ backend/.venv-workers
 backend/.wrangler
 backend/.dev.vars
 backend/data.sql
+.next-export
