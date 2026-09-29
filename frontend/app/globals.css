@@ -1,10 +1,13 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:auto;overflow-y:auto;background:#f3ede1;color:#1f1b2e;font-family:'Rethink Sans',sans-serif;-webkit-font-smoothing:antialiased}
-/* when a phone rubber-bands past the ends, the scene keeps going: the sky's colour above the page (this block sits
-   just above it) and the ground's below (the root background). The engine keeps both variables in sync with the scene. */
-html{background:var(--snug-bottom,#2d3a2b)}
-body{min-height:100vh;min-height:100dvh}
-.snug-edge-top{position:absolute;left:0;right:0;top:-120vh;height:120vh;background:var(--snug-top,#4f88c6);pointer-events:none}
+/* The scene runs edge to edge on phones. --edge-top / --edge-bottom are the scene's sky and ground colours (set by
+   the template). iOS 26 Safari tints the status bar and toolbar from a fixed element touching each edge (theme-color
+   is ignored), and what shows when the page rubber-bands past its ends is the sky above and the ground below. */
+html,body{background-color:var(--edge-bottom,#f3ede1)}
+body::before{content:'';position:absolute;left:0;right:0;top:-100vh;height:100vh;background:var(--edge-top,#f3ede1);pointer-events:none}
+.snug-edge{position:fixed;left:0;right:0;height:2px;z-index:1;pointer-events:none}
+.snug-edge-top{top:0;background-color:var(--edge-top,#f3ede1)}
+.snug-edge-bottom{bottom:0;background-color:var(--edge-bottom,#f3ede1)}
 button{font:inherit;color:inherit;margin:0;border:none;background:none;padding:0;cursor:pointer}
 a{color:#1f1b2e}
 a:hover{color:#4f6fae}

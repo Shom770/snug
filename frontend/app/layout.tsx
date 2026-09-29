@@ -17,7 +17,8 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: 'snug', description: DESCRIPTION },
 };
 
-export const viewport: Viewport = { themeColor: '#4a8fd6' };
+// cover: draw under the status bar and toolbar (Safari tints them from the edge strips in the template)
+export const viewport: Viewport = { viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500&family=Rethink+Sans:wght@500;600;700;800&family=Patrick+Hand&family=Pixelify+Sans:wght@600;700&display=swap" rel="stylesheet" />
       </head>
-      <body><div className="snug-edge-top" aria-hidden />{children}</body>
+      <body>{children}</body>
     </html>
   );
 }
