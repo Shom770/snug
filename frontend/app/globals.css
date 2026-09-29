@@ -1,14 +1,5 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:auto;overflow-y:auto;background:#f3ede1;color:#1f1b2e;font-family:'Rethink Sans',sans-serif;-webkit-font-smoothing:antialiased}
-/* The scene fills the whole screen, behind the phone browser's status bar and toolbar (viewport-fit=cover, and the
-   layout uses the full 100lvh height). --edge-top / --edge-bottom are the scene's own sky and ground colours (set by the
-   template), only for what has no scene: body's is what Safari falls back to for its status bar, the sky above the page
-   and the ground below it show when the page rubber-bands past its ends. */
-body{background-color:var(--edge-top,#f3ede1)}
-html{background-color:var(--edge-bottom,#f3ede1)}
-body::before{content:'';position:absolute;left:0;right:0;top:-100vh;height:100vh;background:var(--edge-top,#f3ede1);pointer-events:none}
-/* Safari colours its bottom toolbar from a fixed element on the bottom edge (else from body, which is the sky): the ground */
-.snug-toolbar-tint{position:fixed;left:0;right:0;bottom:0;height:2px;background-color:var(--edge-bottom,#f3ede1);pointer-events:none}
 button{font:inherit;color:inherit;margin:0;border:none;background:none;padding:0;cursor:pointer}
 a{color:#1f1b2e}
 a:hover{color:#4f6fae}

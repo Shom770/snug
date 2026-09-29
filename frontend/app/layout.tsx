@@ -1,6 +1,6 @@
 import './globals.css';
 
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 const DESCRIPTION = 'know how today will feel before you step outside';
@@ -17,8 +17,6 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: 'snug', description: DESCRIPTION },
 };
 
-// cover: draw under the status bar and toolbar (Safari tints them from the edge strips in the template)
-export const viewport: Viewport = { viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
