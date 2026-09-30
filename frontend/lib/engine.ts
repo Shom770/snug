@@ -261,7 +261,10 @@ const PAL={
 };
 
 function drawScene(ctx,W,H,cond,t,g,seed,wind,bigTree,px,fx){
-  const Z=fx&&fx.zoom?+fx.zoom:1;const P=climPal(cond,fx&&fx.season),hz=P.sky[2],sc=Math.max(0.35,Math.min(1.3,g/560))*Z,hs=Math.max(40,Math.min(g*0.36,280))*Z;
+  const Z=fx&&fx.zoom?+fx.zoom:1;let P=climPal(cond,fx&&fx.season);
+  // past half cloud cover a clear-sky palette greys gradually (not all at once), toward the overcast sky
+  {const cv=fx&&fx.clouds!=null&&fx.clouds!==''?+fx.clouds:null;if(cv!=null&&cv>50&&!P.ceil&&(cond==='sunny'||cond==='partly'||cond==='heat')){const k=Math.min(0.6,(cv-50)/50*0.75);P={...P,sky:P.sky.map((c,i)=>mixHex(c,PAL.overcast.sky[i],k))};}}
+  const hz=P.sky[2],sc=Math.max(0.35,Math.min(1.3,g/560))*Z,hs=Math.max(40,Math.min(g*0.36,280))*Z;
   const circ=(x,y,r)=>{ctx.moveTo(x+r,y);ctx.arc(x,y,Math.max(0.1,r),0,Math.PI*2);};
   let gr=ctx.createLinearGradient(0,0,0,g);gr.addColorStop(0,P.sky[0]);gr.addColorStop(0.62,P.sky[1]);gr.addColorStop(1,hz);ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
   if(P.stars){ctx.fillStyle='#fff7da';for(let i=0;i<Math.min(180,W/4);i++){ctx.globalAlpha=0.2+0.8*Math.abs(Math.sin(t*(0.5+rnd(i)*1.4)+i));const s=Math.max(px,rnd(i*5)>0.9?2:1.2);ctx.fillRect(rnd(i*3+seed)*W,rnd(i*7+2)*g*0.8,s,s);}ctx.globalAlpha=1;
@@ -295,8 +298,12 @@ function drawScene(ctx,W,H,cond,t,g,seed,wind,bigTree,px,fx){
   const deckA=P.ceil?1:0;
   if(deckA>0&&!(fx&&fx.precip==='none')){const step=Math.max(60,120*sc);ctx.save();ctx.globalAlpha=deckA;[[P.shade,0.3,0.9],[P.cloud,0.45,1]].forEach(([col,spd,a],row)=>{const tt=t*cs*spd,base=Math.floor(tt/step),off=tt-base*step;for(let j=-2;j<W/step+2;j++){const k=j-base;const w=step*(1.7+rnd(k*5+row)*0.7);cloud(j*step+off-w*0.3,g*(0.02+row*0.05)+rnd(k*3+seed+row*7)*g*0.07,w,col,P.shade,a*deckA);}});ctx.restore();
     if(P.ceil){const hzg=ctx.createLinearGradient(0,0,0,g*0.35);hzg.addColorStop(0,rgba(P.sky[0],0.35));hzg.addColorStop(1,rgba(P.sky[0],0));ctx.fillStyle=hzg;ctx.fillRect(0,0,W,g*0.35);}}
-  const CN=CV!=null&&!P.ceil?Math.round((CV<3?0:1+Math.pow(CV/100,1.3)*56)*Math.max(0.55,W/1280)):({sunny:3,partly:6,sunset:3,heat:0,overcast:4,rain:4,snow:4,night:3}[cond]??3);
-  for(let i=0;i<CN;i++){const far=i%2===1;const grow=1;const w=(70+rnd(i*7+seed*13)*90)*Math.max(0.45,sc)*(far?0.65:1)*grow;const y=g*(P.ceil?0.22:0.06)+rnd(i*5+seed*3+2)*g*(P.sunset?0.25:CV!=null?0.34:0.36);const sp=cs*(far?0.55:1)*(0.75+rnd(i*9)*0.5);const span=W+w*2;const x=((rnd(i*13+seed)*span+t*sp)%span)-w;cloud(x,y,w,P.cloud,P.shade,far?0.72:0.95);}
+  // With a known cover the puffs are sized and counted to cover about that share of the sky above the hills. They
+  // overlap at random, so count = -ln(1-cover) x area / puff area, where the area includes the stretch they drift
+  // through off each side. 50% looks half cloudy, with the sun going in and out between them.
+  const CC=CV!=null&&!P.ceil?Math.min(0.9,CV/100):null,grow=CC!=null?1+0.9*CC:1,bandH=g*(CC!=null?0.4+0.3*CC:0.36),S=Math.max(0.45,sc)*grow;
+  const CN=CC!=null?(CV<3?0:Math.min(140,Math.max(1,Math.round(-Math.log(1-CC)*(W+2*95*S)*bandH/(2965*S*S))))):({sunny:3,partly:6,sunset:3,heat:0,overcast:4,rain:4,snow:4,night:3}[cond]??3);
+  for(let i=0;i<CN;i++){const far=i%2===1;const w=(70+rnd(i*7+seed*13)*90)*Math.max(0.45,sc)*(far?0.65:1)*grow;const y=g*(P.ceil?0.22:CC!=null?0.02:0.06)+rnd(i*5+seed*3+2)*(P.sunset?g*0.25:bandH);const sp=cs*(far?0.55:1)*(0.75+rnd(i*9)*0.5);const span=W+w*2;const x=((rnd(i*13+seed)*span+t*sp)%span)-w;cloud(x,y,w,P.cloud,P.shade,far?0.72+0.2*(CC||0):0.95);}
   const ridge=a=>0.6*(1-Math.abs(Math.sin(a)))+0.3*(1-Math.abs(Math.sin(a*2.3+1.3)))+0.1*(0.5+0.5*Math.sin(a*6.1));
   const shape=fn=>{ctx.beginPath();ctx.moveTo(0,H);for(let x=0;x<=W+3;x+=3)ctx.lineTo(x,fn(x/W));ctx.lineTo(W+3,H);ctx.closePath();};
   const haze=(y1,y2,a)=>{const h=ctx.createLinearGradient(0,y1,0,y2);h.addColorStop(0,rgba(hz,0));h.addColorStop(1,rgba(hz,a));ctx.fillStyle=h;ctx.fillRect(0,y1,W,y2-y1);};

@@ -32,7 +32,7 @@ ACCESSORIES = {
 FACTORS = {
     'none': 'nothing stands out', 'cold': 'cold (feels below ~60°F)', 'heat': 'heat (feels above ~80°F)',
     'humid': 'muggy, sticky air (feels above ~78°F and humid)', 'wind': 'strong wind', 'wet': 'rain or drizzle', 'storm': 'thunderstorms',
-    'snow': 'snow', 'ice': 'ice, sleet or hail', 'fog': 'fog', 'smoke': 'smoke or haze', 'gloom': 'grey, overcast skies',
+    'snow': 'snow', 'ice': 'ice, sleet or hail', 'fog': 'fog', 'smoke': 'smoke or haze', 'gloom': 'grey, fully overcast skies (no sun at all)',
 }
 HAS_INTENSITY = {'drizzle', 'rain', 'storm', 'hail', 'sleet', 'snow', 'blizzard'}
 
@@ -121,8 +121,9 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
         # it's dark out now; sunglasses would be for tomorrow morning at best
         acc=[k for k in ACCESSORIES if jev.yes(a.get(k)) and not (k == 'sunglasses' and w.night)],
     )
-    opaque = max(w.cloudLow, w.cloudMid) if w.cloudLow is not None and w.cloudMid is not None else w.clouds
+    # the sun-hiding cloud (low and mid layers together; thin high cirrus doesn't hide it), as the scene draws it
+    cover = 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) if w.cloudLow is not None and w.cloudMid is not None else w.clouds
     label, band, factor = describe(jev.choice(a.get('factor'), FACTORS, 'none'), curve[0], w.hour, w.night,
-                                   datetime.fromisoformat(w.time).toordinal(), sky_open=opaque < 70)
+                                   datetime.fromisoformat(w.time).toordinal(), cover=cover)
     return Forecast(score=curve[0], curve=curve, startHour=w.hour, label=label, band=band, factor=factor,
                     outfit=outfit, model=model, ms=round((time.perf_counter() - t0) * 1000), personalized=bool(history or tuning or tuned))

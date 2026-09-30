@@ -26,6 +26,9 @@ export const DESCRIPTORS: Record<Factor, Partial<Record<Band, string[]>>> = {
   ice: { perfect: ['icy'], great: ['icy'], good: ['icy'], meh: ['icy', 'sleety'], rough: ['sleety'], bad: ['freezing rain'], awful: ['freezing rain'] },
   fog: { perfect: ['misty'], great: ['misty'], good: ['misty', 'foggy'], meh: ['foggy'], rough: ['foggy'], bad: ['dense fog'], awful: ['dense fog'] },
   smoke: { perfect: ['hazy'], great: ['hazy'], good: ['hazy'], meh: ['hazy', 'smoky'], rough: ['smoky'], bad: ['smoky'], awful: ['smoky'] },
+  // broken cloud, the sun in and out (see describeDay: about 25-62% and 62-88% of the sky)
+  partly: { perfect: ['partly sunny'], great: ['partly sunny'], good: ['partly sunny'], meh: ['partly sunny'], rough: ['partly sunny'], bad: ['partly sunny'], awful: ['partly sunny'] },
+  mostly: { perfect: ['mostly cloudy'], great: ['mostly cloudy'], good: ['mostly cloudy'], meh: ['mostly cloudy'], rough: ['mostly cloudy'], bad: ['mostly cloudy'], awful: ['mostly cloudy'] },
   gloom: { perfect: ['cloudy'], great: ['cloudy'], good: ['cloudy', 'overcast'], meh: ['overcast', 'grey'], rough: ['overcast', 'grey'], bad: ['dreary'], awful: ['dreary'] },
   dusk: { perfect: ['golden'], great: ['golden'], good: ['clear'] },
   night: { perfect: ['starry', 'clear'], great: ['clear', 'starry'], good: ['clear'] },
@@ -44,6 +47,8 @@ export const BLURBS: Record<Factor, string[]> = {
   ice: ['icy out. watch your step.', 'slick out. go slow.'],
   fog: ['foggy. low visibility.', 'misty morning. clears later.'],
   smoke: ['smoky air. limit time outside.', 'hazy air. keep it short outside.'],
+  partly: ['sun and clouds.', 'sun in and out.'],
+  mostly: ['mostly cloudy, some sun.', 'clouds with breaks.'],
   gloom: ['grey but dry.', 'cloudy and flat.'],
   dusk: ['nice evening. stay out.'],
   night: ['clear night. good for a walk.'],
@@ -83,10 +88,12 @@ export function describeDay(w: NormalizedWeather, score: number, extra: { best?:
   const band = bandOf(score);
   let factor: Factor = dominantFactor(w);
   const hour = w.hour ?? 12;
-  // evening/night words only under an open sky (low and mid clouds under 70%)
-  const open = (w.cloudLow != null && w.cloudMid != null ? Math.max(w.cloudLow, w.cloudMid) : w.clouds) < 70;
-  if (factor === 'none' && !open) factor = 'gloom';
-  else if (factor === 'none' && w.night && DESCRIPTORS.night[band]) factor = 'night';
+  // the sky words follow the cover that hides the sun (low and mid cloud together), same as the backend's describe():
+  // grey only for a (nearly) complete deck, sun and clouds in between; evening/night words only under an open sky
+  const cover = w.cloudLow != null && w.cloudMid != null ? 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) : w.clouds;
+  if (factor === 'none' || factor === 'gloom') factor = cover >= 88 ? 'gloom' : cover >= 62 ? 'mostly' : cover >= 25 ? 'partly' : 'none';
+  if (factor === 'partly' && w.night) return { label: 'partly cloudy', band, factor, blurb: 'clouds and stars.', options: ['partly cloudy'] };
+  if (factor === 'none' && w.night && DESCRIPTORS.night[band]) factor = 'night';
   else if (factor === 'none' && hour >= 17 && hour <= 19 && DESCRIPTORS.dusk[band]) factor = 'dusk';
   const cell = DESCRIPTORS[factor][band] || DESCRIPTORS.none[band] || ['okay'];
   const seed = seedOf(w);

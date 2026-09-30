@@ -73,7 +73,7 @@ export interface NormalizedWeather {
 }
 
 export type Band = 'perfect' | 'great' | 'good' | 'meh' | 'rough' | 'bad' | 'awful';
-export type Factor = 'none' | 'cold' | 'heat' | 'humid' | 'wind' | 'wet' | 'storm' | 'snow' | 'ice' | 'fog' | 'smoke' | 'gloom' | 'dusk' | 'night';
+export type Factor = 'none' | 'cold' | 'heat' | 'humid' | 'wind' | 'wet' | 'storm' | 'snow' | 'ice' | 'fog' | 'smoke' | 'partly' | 'mostly' | 'gloom' | 'dusk' | 'night';
 
 export interface Description {
   label: string;

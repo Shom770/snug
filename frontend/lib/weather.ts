@@ -12,7 +12,7 @@ interface SceneDef { cond: SceneCond; icon: string; name: string; clouds: number
 const SCENE: Record<Condition, SceneDef> = {
   clear: { cond: 'sunny', icon: 'sunny', name: 'Clear', clouds: 5 },
   partly: { cond: 'partly', icon: 'partly', name: 'Partly cloudy', clouds: 40 },
-  cloudy: { cond: 'overcast', icon: 'overcast', name: 'Cloudy', clouds: 75 },
+  cloudy: { cond: 'partly', icon: 'overcast', name: 'Mostly cloudy', clouds: 75 }, // dense puffs, the sun in and out
   overcast: { cond: 'overcast', icon: 'overcast', name: 'Overcast', clouds: 95 },
   fog: { cond: 'overcast', icon: 'fog', name: 'Foggy', clouds: 100 },
   drizzle: { cond: 'overcast', precip: 'drizzle', icon: 'drizzle', name: 'Drizzle', clouds: 96 },
@@ -101,11 +101,12 @@ export function buildPreset(input: WeatherInput, outfitFor?: OutfitFn): BuildRes
   const best = curve.indexOf(Math.max(...curve)), bh = (w.hour + best) % 24;
   const d = describeDay(w, score, { best: (bh % 12 || 12) + (bh < 12 ? 'am' : 'pm') });
   // For sky-only weather the look comes from the clouds that block the sun: low and mid layers (thin high cirrus
-  // doesn't). 70%+ of those is plain cloudy, no sun; without layer data, total cover stands in for them.
+  // doesn't). Only a near-complete deck (88%+) is the grey ceiling with no sun; below that the renderer draws that
+  // share of the sky as clouds, so mostly cloudy still has gaps and glimpses of sun. Without layer data, total cover.
   let cond: SceneCond = sc.cond;
   if (SKY_ONLY.includes(w.condition)) {
-    const opaque = w.cloudLow != null && w.cloudMid != null ? Math.max(w.cloudLow, w.cloudMid) : w.clouds;
-    cond = opaque >= 70 ? 'overcast' : opaque >= 20 || w.clouds >= 40 ? 'partly' : 'sunny';
+    const opaque = w.cloudLow != null && w.cloudMid != null ? 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) : w.clouds;
+    cond = opaque >= 88 ? 'overcast' : opaque >= 20 || w.clouds >= 40 ? 'partly' : 'sunny';
   }
   const clearish = cond === 'sunny' || cond === 'partly';
   if (clearish && w.night) cond = 'night';

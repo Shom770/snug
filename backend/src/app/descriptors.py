@@ -20,6 +20,9 @@ DESCRIPTORS: dict[str, dict[str, list[str]]] = {
     'ice': {'perfect': ['icy'], 'great': ['icy'], 'good': ['icy'], 'meh': ['icy', 'sleety'], 'rough': ['sleety'], 'bad': ['freezing rain'], 'awful': ['freezing rain']},
     'fog': {'perfect': ['misty'], 'great': ['misty'], 'good': ['misty', 'foggy'], 'meh': ['foggy'], 'rough': ['foggy'], 'bad': ['dense fog'], 'awful': ['dense fog']},
     'smoke': {'perfect': ['hazy'], 'great': ['hazy'], 'good': ['hazy'], 'meh': ['hazy', 'smoky'], 'rough': ['smoky'], 'bad': ['smoky'], 'awful': ['smoky']},
+    # broken cloud, the sun in and out: 'partly' is about 25-62% of the sky, 'mostly' 62-88% (see describe)
+    'partly': {b: ['partly sunny'] for b, _ in BANDS},
+    'mostly': {b: ['mostly cloudy'] for b, _ in BANDS},
     'gloom': {'perfect': ['cloudy'], 'great': ['cloudy'], 'good': ['cloudy', 'overcast'], 'meh': ['overcast', 'grey'], 'rough': ['overcast', 'grey'], 'bad': ['dreary'], 'awful': ['dreary']},
     'dusk': {'perfect': ['golden'], 'great': ['golden'], 'good': ['clear']},
     'night': {'perfect': ['starry', 'clear'], 'great': ['clear', 'starry'], 'good': ['clear']},
@@ -30,13 +33,24 @@ def band_of(score: int) -> str:
     return next(b for b, lo in BANDS if score >= lo)
 
 
-def describe(factor: str, score: int, hour: int, night: bool, day: int, sky_open: bool = True) -> tuple[str, str, str]:
-    """(label, band, factor). Pleasant evenings and clear nights get their own words, like describeDay(), but only when
-    the sky is actually open (sky_open: low/mid clouds under 70%); a golden evening under a grey deck isn't golden."""
+# share of the sky (low + mid cloud, the kind that hides the sun) where the words change
+PARTLY, MOSTLY, OVERCAST = 25, 62, 88
+
+
+def sky_word(cover: float) -> str:
+    """The cloud factor that fits a cover: grey only when the deck is (nearly) complete, otherwise sun and clouds."""
+    return 'gloom' if cover >= OVERCAST else 'mostly' if cover >= MOSTLY else 'partly' if cover >= PARTLY else 'none'
+
+
+def describe(factor: str, score: int, hour: int, night: bool, day: int, cover: float = 0) -> tuple[str, str, str]:
+    """(label, band, factor). The sky words follow the actual cover (Jev saying "grey" at half cloud becomes "partly
+    sunny"). Pleasant evenings and clear nights get their own words, like describeDay(), but only under open sky."""
     band = band_of(score)
-    if factor == 'none' and not sky_open:
-        factor = 'gloom'  # nothing else stands out, but the sun's hidden: say so instead of "clear"
-    elif factor == 'none' and night and band in DESCRIPTORS['night']:
+    if factor in ('none', 'gloom'):
+        factor = sky_word(cover)
+    if factor == 'partly' and night:
+        return 'partly cloudy', band, factor
+    if factor == 'none' and night and band in DESCRIPTORS['night']:
         factor = 'night'
     elif factor == 'none' and 17 <= hour <= 19 and band in DESCRIPTORS['dusk']:
         factor = 'dusk'
