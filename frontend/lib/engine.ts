@@ -831,12 +831,12 @@ class Component extends DCLogic {
   closeRateAnim(){if(this._closing)return;this._closing=true;this.swingSign(false,()=>{this._closing=false;this.setState({rateOpen:false});});}
   panAB(){const k=ABNOW;if(!k){ABDONE=null;return;}if(k===ABDONE)return;const root=this.rootRef.current;if(!root)return;const cards=[...root.querySelectorAll('[data-abcard]')];if(!cards.length)return;const first=!ABDONE;ABDONE=k;cards.forEach(c=>c.style.opacity='1');
     cards.forEach((c,i)=>{if(!c.animate)return;const end=c.style.transform||'';c.animate([{transform:'perspective(900px) '+end+' rotateY(-90deg) scale(0.9)'},{offset:0.7,transform:'perspective(900px) '+end+' rotateY(12deg) scale(1.02)'},{transform:'perspective(900px) '+end+' rotateY(0deg) scale(1)'}],{duration:750,delay:(first?120:0)+i*110,easing:'cubic-bezier(.3,0,.2,1)',fill:'backwards'});});}
-  ldStart(){this._ldT0=performance.now();this._ldLast=this._ldT0;this._ldP=[];this._plan=null;this._poofed=false;this._ldKeys={};this.ldApply(this._ldT0);this.ldLoop();}
+  ldStart(){this._ldT0=performance.now();if(this._phase==='reveal')this._rvT0=this._ldT0;this._ldLast=this._ldT0;this._ldP=[];this._plan=null;this._poofed=false;this._ldKeys={};this.ldApply(this._ldT0);this.ldLoop();}
   // the frame loop; a bad frame is logged and skipped, never allowed to stop the loop
   ldLoop(){cancelAnimationFrame(this._raf);const tick=()=>{if(this._dead||this._phase==='ready')return;this._raf=requestAnimationFrame(tick);try{this.ldApply(performance.now());}catch(e){console.error('loading frame failed',e);}};this._raf=requestAnimationFrame(tick);}
   // back to the loading world (e.g. a different city was picked)
-  ldRestart(){if(this._io){this._io.disconnect();this._io=null;}this._dressed=false;this._phase='loading';this.forceUpdate();this.ldStart();}
-  ldReveal(){clearTimeout(this._rvDog);this._rvDog=setTimeout(()=>{if(!this._dead&&this._phase==='reveal'){console.warn('reveal stalled; finishing');this.ldFinish();}},7000);const g=this._geo;this._rvFrom=this._kid?{...this._kid}:{x:g?g.aCx:0,sit:false,pose:'stand',kiteU:0};this._phase='reveal';this._rvT0=performance.now();this.ldLoop();this.forceUpdate();}
+  ldRestart(){if(this._io){this._io.disconnect();this._io=null;}this._dressed=false;this._quick=false;this._phase='loading';this.forceUpdate();this.ldStart();}
+  ldReveal(){clearTimeout(this._rvDog);this._rvDog=setTimeout(()=>{if(!this._dead&&this._phase==='reveal'){console.warn('reveal stalled; finishing');this.ldFinish();}},7000);const g=this._geo;this._rvFrom=this._kid?{...this._kid}:{x:g?g.aCx:0,sit:false,pose:'stand',kiteU:0};this._quick=!!this.props.quick;this._phase='reveal';this._rvT0=performance.now();this.ldLoop();this.forceUpdate();}
   ldEls(){const r=this.rootRef.current,q=k=>r&&r.querySelector('[data-rv="'+k+'"]');
     return {av:q('av'),sh:q('sh'),fx:q('fx'),sg:q('sg'),board:q('board'),num:q('num'),nums:q('nums'),scroll:q('scroll'),scene:r&&r.querySelector('canvas[data-scene]'),load:r&&r.querySelector('canvas[data-loadfx]')};}
   ldApply(now){
@@ -876,6 +876,16 @@ class Component extends DCLogic {
       [E.num,E.nums,E.fx,E.sg,E.board,E.scroll].forEach(el=>op(el,0));if(E.board)E.board.style.pointerEvents='none';
       if(E.scene){E.scene.dataset.ra='0';E.scene.dataset.bu=String(LOAD_BU);}
     }else{
+      // a forecast we already had (props.quick): no walk back or growing hills, the day is just there and snug poofs in
+      if(this._quick){kid={x:g.aCx,y:0,lean:0};fade=0;
+        if(r>=0.12&&!this._poofed){this._poofed=true;ldPuff(this._ldP,'cloud',g.aCx,g.aT+g.aH*0.55,12,0);ldPuff(this._ldP,'star',g.aCx,g.aT+g.aH*0.5,14,0);this.forceUpdate();}
+        [E.scene,E.num,E.nums].forEach(el=>{if(el&&el.dataset.curve)el.dataset.curve=g.curveStr;});if(E.scene){E.scene.dataset.ra='1';delete E.scene.dataset.bu;}
+        [E.num,E.nums].forEach(el=>{if(el){el.dataset.num=''+g.score;el.dataset.lab=g.label;}});
+        [E.num,E.nums,E.sg,E.fx,E.board,E.scroll].forEach(el=>{if(el){op(el,1);el.style.transform='';}});
+        op(E.av,this._poofed?1:0);op(E.sh,this._poofed?1:0);
+        if(r>=0.9){this.ldFinish();return;}
+        this.paint();
+      }else{
       // stand up, stroll back, hop, poof: dressed for the day
       const f=this._rvFrom,tUp=f.pose!=='stand'?0.3:0,dWalk=Math.min(1,Math.max(0.2,Math.abs(g.aCx-f.x)/160)),tA=tUp+dWalk,tP=tA+0.35;
       if(r<tUp){kid={x:f.x,y:0,lean:0};pose=f.pose;if(f.pose==='kite'){kiteU=f.kiteU*(1-r/tUp);const hand=[f.x+10*aS,g.aT+8*aS];props.push(ctx=>drawKite(ctx,g.vw,hand[0],hand[1],k4,t,2,kiteU));}}
@@ -895,6 +905,7 @@ class Component extends DCLogic {
       op(E.scroll,cl01((r-2.7)/0.4));
       if(r>=Math.max(3.1,tP+0.8)){this.ldFinish();return;}
       this.paint();
+      }
     }
     this._kid={x:kid.x,sit:pose!=='stand',pose,kiteU};
     const sit=pose==='sit';
@@ -930,7 +941,7 @@ class Component extends DCLogic {
   renderVals(){
     setAvatar(this.props.avatar);
     const st=this.state,pk=st.preset,P0=PRESETS[pk],PREF=prefsOf(st.picks),ADJ=P0&&P0.noTune?0:tuneAdj(P0,PREF),PK0=pkind(P0),IDEF=PK0?(INTDEF[pk]??0.5):0,INT=PK0?(P0&&P0.noTune?IDEF:(st.intensity??this.props.intensity??IDEF)):0,IADJ=PK0&&!P0.noTune?Math.round((IDEF-INT)*26):0,cl1=v=>Math.max(1,Math.min(100,v+ADJ+IADJ)),P={...P0,score:cl1(P0.score),curve:P0.curve.map(cl1),start:st.night&&P0.cond!=='night'&&(P0.start<19&&P0.start>5)?21:P0.start},cond=P.cond,C=st.units==='°C';
-    if(this._phase==null)this._phase=this.props.loading?'loading':'ready';const LDP=this._phase==='loading'||(this._phase==='reveal'&&!this._poofed),LD0=this._phase==='loading';if(LDP){P.act='stand';P.pose='stand';}
+    if(this._phase==null){this._phase=this.props.loading?'loading':this.props.quick&&this.props.showApp?'reveal':'ready';if(this._phase==='reveal'){this._quick=true;this._rvFrom={x:0,sit:false,pose:'stand',kiteU:0};this._rvT0=performance.now();}}const LDP=this._phase==='loading'||(this._phase==='reveal'&&!this._poofed),LD0=this._phase==='loading';if(LDP){P.act='stand';P.pose='stand';}
     const CITY=this.props.city||st.profile.city||'philadelphia',dateLine=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toLowerCase();
     ABNOW='';
     const vw=st.vw||1024,vh=st.vh||800,m=vw<760,inApp=this.props.showApp!=null?!!this.props.showApp:st.authed,LHb=m?Math.max(640,vh):Math.max(620,vh),LHx=m?Math.max(1180,vh):LHb,LHm=(m&&st.lgStep===2)?Math.max(1180,vh):Math.max(640,vh),rating=st.rateOpen;

@@ -17,6 +17,8 @@ export interface SnugProps {
   skipLogin?: boolean;
   /** show the loading world (snug playing in the scene) until this turns false, then reveal the forecast */
   loading?: boolean;
+  /** the forecast being revealed is one we already had: skip the walk back and growing hills, snug just poofs in */
+  quick?: boolean;
   /** place name shown on the signs, lowercase */
   city?: string;
   /** the evening check-in was saved; reject to show the message on the save button */
