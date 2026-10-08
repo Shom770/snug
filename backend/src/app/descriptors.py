@@ -42,7 +42,7 @@ def sky_word(cover: float) -> str:
     return 'gloom' if cover >= OVERCAST else 'mostly' if cover >= MOSTLY else 'partly' if cover >= PARTLY else 'none'
 
 
-def describe(factor: str, score: int, hour: int, night: bool, day: int, cover: float = 0) -> tuple[str, str, str]:
+def describe(factor: str, score: int, hour: int, night: bool, day: int, cover: float = 0, golden: bool = False) -> tuple[str, str, str]:
     """(label, band, factor). The sky words follow the actual cover (Jev saying "grey" at half cloud becomes "partly
     sunny"). Pleasant evenings and clear nights get their own words, like describeDay(), but only under open sky."""
     band = band_of(score)
@@ -52,7 +52,7 @@ def describe(factor: str, score: int, hour: int, night: bool, day: int, cover: f
         return 'partly cloudy', band, factor
     if factor == 'none' and night and band in DESCRIPTORS['night']:
         factor = 'night'
-    elif factor == 'none' and 17 <= hour <= 19 and band in DESCRIPTORS['dusk']:
+    elif factor == 'none' and golden and hour >= 12 and band in DESCRIPTORS['dusk']:  # the evening glow, not dawn
         factor = 'dusk'
     cell = DESCRIPTORS[factor].get(band) or DESCRIPTORS['none'][band]
     return cell[day % len(cell)], band, factor

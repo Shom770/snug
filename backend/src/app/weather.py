@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from . import nws
+from . import nws, sun
 from .models import Condition, HourWeather, Location, Weather
 
 log = logging.getLogger('snug')
@@ -97,7 +97,7 @@ async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
     hourly[0] = now
     temps = [x.temp for x in hourly]
     return Weather(
-        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=max(c['time'], hour_now + ':00'), dir=c['wind_direction_10m'], night=c['is_day'] == 0,
+        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=max(c['time'], hour_now + ':00'), dir=c['wind_direction_10m'], **dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon))),
         lo=round(min(r['daily']['temperature_2m_min'][0], *temps), 1), hi=round(max(r['daily']['temperature_2m_max'][0], *temps), 1),
         hourly=hourly, source='open-meteo',
     )

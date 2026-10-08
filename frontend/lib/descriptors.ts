@@ -94,7 +94,7 @@ export function describeDay(w: NormalizedWeather, score: number, extra: { best?:
   if (factor === 'none' || factor === 'gloom') factor = cover >= 88 ? 'gloom' : cover >= 62 ? 'mostly' : cover >= 25 ? 'partly' : 'none';
   if (factor === 'partly' && w.night) return { label: 'partly cloudy', band, factor, blurb: 'clouds and stars.', options: ['partly cloudy'] };
   if (factor === 'none' && w.night && DESCRIPTORS.night[band]) factor = 'night';
-  else if (factor === 'none' && hour >= 17 && hour <= 19 && DESCRIPTORS.dusk[band]) factor = 'dusk';
+  else if (factor === 'none' && w.golden && hour >= 12 && DESCRIPTORS.dusk[band]) factor = 'dusk'; // the evening glow
   const cell = DESCRIPTORS[factor][band] || DESCRIPTORS.none[band] || ['okay'];
   const seed = seedOf(w);
   const unit = '°';

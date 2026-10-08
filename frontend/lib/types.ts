@@ -35,6 +35,8 @@ export interface WeatherInput extends HourInput {
   /** local hour 0-23 */
   hour?: number;
   night?: boolean;
+  /** the sun low on the horizon right now (sunset or sunrise light); from the backend's sun position */
+  golden?: boolean;
   /** up to 12 hours starting now; missing fields fall back to the current values */
   hourly?: HourInput[];
   /** skip the built-in comfort model */
@@ -61,6 +63,7 @@ export interface NormalizedWeather {
   humidity: number;
   intensity: number;
   night: boolean;
+  golden: boolean;
   cloudLow: number | null;
   cloudMid: number | null;
   cloudHigh: number | null;

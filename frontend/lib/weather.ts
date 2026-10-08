@@ -83,6 +83,7 @@ export function normalize(input: WeatherInput = {}): NormalizedWeather {
     humidity: +(input.humidity ?? 50),
     intensity: HAS_INTENSITY.includes(condition) ? +(input.intensity ?? DEF_INT[condition] ?? 0.5) : 0,
     night: input.night ?? (hour >= 20 || hour < 6),
+    golden: input.golden ?? (input.night == null && hour >= 18 && hour < 20), // without the real sun position, a rough evening guess
     cloudLow: input.cloudLow ?? null, cloudMid: input.cloudMid ?? null, cloudHigh: input.cloudHigh ?? null,
     score: input.score, curve: input.curve, label: input.label, hourly: input.hourly, date: input.date, outfit: input.outfit,
   };
@@ -110,7 +111,7 @@ export function buildPreset(input: WeatherInput, outfitFor?: OutfitFn): BuildRes
   }
   const clearish = cond === 'sunny' || cond === 'partly';
   if (clearish && w.night) cond = 'night';
-  else if (clearish && w.hour >= 17 && w.hour <= 19) cond = 'sunset';
+  else if (clearish && w.golden) cond = 'sunset'; // sun low on the horizon (backend's sun position): sunset or sunrise light
   let act: Activity = 'stand';
   if (score >= 78 && cond === 'night' && w.clouds < 35) act = 'stargaze';
   else if (score >= 75 && cond === 'sunset') act = 'sunset';

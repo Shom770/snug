@@ -130,7 +130,8 @@ export default function Home() {
           const fc = { score: f.score, curve: f.curve, label: f.label, outfit: f.outfit };
           const sw = seen?.weather;
           // showing a seen forecast and the server agrees: leave the page exactly as it is
-          const same = !!sw && JSON.stringify(fc) === JSON.stringify({ score: sw.score, curve: sw.curve, label: sw.label, outfit: sw.outfit });
+          const same = !!sw && w.night === sw.night && w.golden === sw.golden // the sun may have set since
+            && JSON.stringify(fc) === JSON.stringify({ score: sw.score, curve: sw.curve, label: sw.label, outfit: sw.outfit });
           const shown = same ? sw : { ...w, ...fc };
           if (!same) setWeather(shown);
           setForecastId(f.forecastId);

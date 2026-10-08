@@ -7,7 +7,7 @@ Condition = Literal[
     'hail', 'sleet', 'snow', 'blizzard', 'windy', 'smoke', 'heat', 'humid',
 ]
 Band = Literal['perfect', 'great', 'good', 'meh', 'rough', 'bad', 'awful']
-Factor = Literal['none', 'cold', 'heat', 'humid', 'wind', 'wet', 'storm', 'snow', 'ice', 'fog', 'smoke', 'gloom', 'dusk', 'night']
+Factor = Literal['none', 'cold', 'heat', 'humid', 'wind', 'wet', 'storm', 'snow', 'ice', 'fog', 'smoke', 'partly', 'mostly', 'gloom', 'dusk', 'night']
 
 
 class Outfit(BaseModel):
@@ -51,7 +51,8 @@ class Weather(HourWeather):
     lo: float
     hi: float
     dir: float  # degrees the wind comes from
-    night: bool
+    night: bool  # after civil dusk / before civil dawn (see sun.py)
+    golden: bool = False  # the sun low on the horizon: sunset (or sunrise) light
     hourly: list[HourWeather] = Field(min_length=1, max_length=12)  # starts with the current hour
     source: Literal['nws', 'open-meteo'] = 'open-meteo'
 

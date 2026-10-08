@@ -124,6 +124,6 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     # the sun-hiding cloud (low and mid layers together; thin high cirrus doesn't hide it), as the scene draws it
     cover = 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) if w.cloudLow is not None and w.cloudMid is not None else w.clouds
     label, band, factor = describe(jev.choice(a.get('factor'), FACTORS, 'none'), curve[0], w.hour, w.night,
-                                   datetime.fromisoformat(w.time).toordinal(), cover=cover)
+                                   datetime.fromisoformat(w.time).toordinal(), cover=cover, golden=w.golden)
     return Forecast(score=curve[0], curve=curve, startHour=w.hour, label=label, band=band, factor=factor,
                     outfit=outfit, model=model, ms=round((time.perf_counter() - t0) * 1000), personalized=bool(history or tuning or tuned))

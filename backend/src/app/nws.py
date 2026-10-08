@@ -4,7 +4,6 @@ points/{lat},{lon} gives the forecast grid for a place; the raw gridpoint data h
 precipitation, temps, wind and gusts, which is what we need (the text forecasts round all of that away).
 """
 
-import math
 import os
 import re
 import time
@@ -13,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from . import sun
 from .models import Condition, HourWeather, Location, Weather
 
 
@@ -71,19 +71,6 @@ def _series(grid: dict, key: str) -> list[tuple[datetime, datetime, object]]:
 
 def _at(series: list, t: datetime, default=None):
     return next((v for s, e, v in series if s <= t < e and v is not None), default)
-
-
-def _is_day(lat: float, lon: float, t: datetime) -> bool:
-    """Sun above the horizon (NOAA solar position approximation)."""
-    u = t.astimezone(timezone.utc)
-    g = 2 * math.pi / 365 * (u.timetuple().tm_yday - 1 + (u.hour - 12) / 24)
-    eqt = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g) - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
-    decl = (0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g) + 0.000907 * math.sin(2 * g)
-            - 0.002697 * math.cos(3 * g) + 0.00148 * math.sin(3 * g))
-    ha = math.radians((u.hour * 60 + u.minute + eqt + 4 * lon) / 4 - 180)
-    la = math.radians(lat)
-    cos_zen = math.sin(la) * math.sin(decl) + math.cos(la) * math.cos(decl) * math.cos(ha)
-    return 90 - math.degrees(math.acos(max(-1, min(1, cos_zen)))) > -0.833
 
 
 def _sky(cover: float) -> Condition:
@@ -148,7 +135,7 @@ async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
     hi, lo = _at(S['maxTemperature'], now), _at(S['minTemperature'], now)
     return Weather(
         **now_h.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=now.strftime('%Y-%m-%dT%H:%M'),
-        dir=_at(S['windDirection'], start, 0), night=not _is_day(loc.lat, loc.lon, now),
+        dir=_at(S['windDirection'], start, 0), **dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon, now))),
         lo=round(min(temps + ([C_TO_F(lo)] if lo is not None else [])), 1), hi=round(max(temps + ([C_TO_F(hi)] if hi is not None else [])), 1),
         hourly=hourly, source='nws',
     )
