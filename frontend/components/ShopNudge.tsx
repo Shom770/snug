@@ -25,7 +25,7 @@ export default function ShopNudge({ onShop, onDismiss }: { onShop: () => void; o
     <div style={{ position: 'absolute', left: pos.left, top: pos.top, transform: 'translateY(-100%)', zIndex: 3, fontFamily: "'Rethink Sans',sans-serif", animation: 'snug-nudge 2.6s ease-in-out infinite' }}>
       <style>{'@keyframes snug-nudge{0%,100%{transform:translateY(-100%)}50%{transform:translateY(calc(-100% - 4px))}}'}</style>
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 8px 7px 12px', background: CREAM, color: INK, borderRadius: 12, boxShadow: `0 3px 0 ${WOOD}, 0 6px 14px rgba(20,10,4,0.25)`, whiteSpace: 'nowrap' }}>
-        <button onClick={onShop} style={{ fontSize: 13, fontWeight: 800, color: INK }}>take me shopping? 🛍</button>
+        <button onClick={onShop} style={{ fontSize: 13, fontWeight: 800, color: INK }}>take me shopping?</button>
         <button onClick={onDismiss} aria-label="not now" style={{ fontSize: 13, fontWeight: 800, color: INK, opacity: 0.5, padding: '0 4px' }}>×</button>
         <span aria-hidden style={{ position: 'absolute', left: 14, bottom: -7, width: 12, height: 12, background: CREAM, transform: 'rotate(45deg)', boxShadow: `3px 3px 0 ${WOOD}` }} />
       </div>

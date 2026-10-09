@@ -18,8 +18,15 @@ from .models import Forecast, Outfit, Weather
 # 10 levels (Jev's max). The expected level 0..9 maps onto a 1-100 comfort score.
 COMFORT = ['dangerous', 'miserable', 'bad', 'rough', 'unpleasant', 'meh', 'okay', 'comfortable', 'pleasant', 'perfect']
 
-TOPS = {'tank': 'tank top', 'tee': 't-shirt', 'long': 'long sleeve', 'sweater': 'sweater'}
-OUTERS = {'none': 'none', 'light': 'light jacket', 'hoodie': 'hoodie', 'coat': 'winter coat', 'rain': 'rain jacket (for rain when it’s mild or cool, not in the heat)'}
+# How warmly to dress, as one graded score (Jev's choice questions kept landing on "t-shirt" and "light jacket" even at
+# 40°F; a score spreads properly, like the comfort curve). Each level is a top and an outer layer.
+# The rough feels-like ranges anchor it; the person's check-ins can still lean it warmer or lighter.
+WARMTH = [('tank top (feels 88°F+)', 'tank', 'none'), ('t-shirt (74-88°F)', 'tee', 'none'),
+          ('t-shirt + light layer (67-74°F)', 'tee', 'layer'), ('long sleeves (61-67°F)', 'long', 'none'),
+          ('long sleeves + light layer (54-61°F)', 'long', 'layer'), ('sweater (48-54°F)', 'sweater', 'none'),
+          ('sweater + light layer (42-48°F)', 'sweater', 'layer'), ('sweater + winter coat (30-42°F)', 'sweater', 'coat'),
+          ('heavy winter coat (15-30°F)', 'sweater', 'coat'), ('bundled up (below 15°F)', 'sweater', 'coat')]
+RAIN_GEAR = ('Will they want a rain jacket today?', "yes, rain is likely while they're out and it isn't hot", 'no, it stays dry, or it is too hot for one')
 BOTTOMS = {'shorts': 'shorts', 'pants': 'pants'}
 # a bare "bring X?" sits on the fence (~0.5); spelling out what yes/no mean gives Jev something to decide on
 ACCESSORIES = {
@@ -102,8 +109,8 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
         f'h{i}': jev.score_q(f'How comfortable is it outside at {h.hour}:00, dressed sensibly?', COMFORT)
         for i, h in enumerate(w.hourly)
     }
-    qs['top'] = jev.choice_q('Top to wear today', TOPS)
-    qs['outer'] = jev.choice_q('Outer layer today', OUTERS)
+    qs['warmth'] = jev.score_q('How warmly should they dress to be comfortable outside today, for the hours they are out?', [lv for lv, _, _ in WARMTH])
+    qs['rain'] = jev.noul_q(*RAIN_GEAR)
     qs['bottom'] = jev.choice_q('Bottoms today', BOTTOMS)
     for k, (q, yes, no) in ACCESSORIES.items():
         qs[k] = jev.noul_q(q, yes, no)
@@ -114,12 +121,20 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     top = len(COMFORT) - 1
     curve = [max(1, min(100, round(1 + jev.score(a[f'h{i}']) / top * 99))) for i in range(len(w.hourly))]
     curve += [curve[-1]] * (12 - len(curve))
+    _, top_, layer = WARMTH[max(0, min(len(WARMTH) - 1, round(jev.score(a['warmth']))))]
+    if jev.yes(a.get('rain')) and layer != 'coat':
+        layer = 'rain'
+    elif layer == 'layer':  # a hoodie on a dry, calm day; a jacket when it's windy or damp
+        dry = max(h.pop for h in w.hourly[:6]) < 30 and w.wind < 15 and w.gust < 25
+        layer = 'hoodie' if dry else 'light'
     outfit = Outfit(
-        top=jev.choice(a.get('top'), TOPS, 'tee'),
-        outer=jev.choice(a.get('outer'), OUTERS, 'none'),
+        top=top_,
+        outer=layer,
         bottom=jev.choice(a.get('bottom'), BOTTOMS, 'pants'),
         # it's dark out now; sunglasses would be for tomorrow morning at best
-        acc=[k for k in ACCESSORIES if jev.yes(a.get(k)) and not (k == 'sunglasses' and w.night)],
+        # no sunglasses after dark, and no umbrella when what's falling is snow
+        acc=[k for k in ACCESSORIES if jev.yes(a.get(k)) and not (k == 'sunglasses' and w.night)
+             and not (k == 'umbrella' and w.condition in ('snow', 'blizzard'))],
     )
     # the sun-hiding cloud (low and mid layers together; thin high cirrus doesn't hide it), as the scene draws it
     cover = 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) if w.cloudLow is not None and w.cloudMid is not None else w.clouds

@@ -26,7 +26,7 @@ export default function AccountMenu({ place, onPlace, onEditSnug, onShop }: { pl
             <div style={{ color: LIGHT, fontSize: 13, fontWeight: 800, textShadow: `1px 1px 0 ${WOOD}` }}>change place</div>
             <LocationSearch inline width={272} onPick={p => { setOpen(false); onPlace(p); }} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => { setOpen(false); onShop(); }} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>🛍 go shopping</button>
+              <button onClick={() => { setOpen(false); onShop(); }} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>go shopping</button>
               <button onClick={() => { setOpen(false); onEditSnug(); }} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>✎ edit my snug</button>
             </div>
           </div>

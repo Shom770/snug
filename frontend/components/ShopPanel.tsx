@@ -1,226 +1,315 @@
 'use client';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CP, CREAM, INK, LIGHT, PLANK, WOOD, WOOD_TEX } from './auth';
-import { Chip, Swatch, type Avatar, type Outfit, type Piece } from './CharacterPanel';
-import { AV_DEFAULT, COLORS, STYLES, itemSprite, nameOf, palOf, sprite } from '../lib/engine';
+import type { Avatar, Outfit, Piece } from './CharacterPanel';
+import { AV_DEFAULT, ITEMS, KITS, itemSprite, kitWardrobe, sprite } from '../lib/engine';
 
-const ST = STYLES as Record<string, { label: string; pal?: Record<string, string[]>; det?: Record<string, string> }>;
-const COL = COLORS as Record<string, string[]>;
+interface Item { id: string; kind: string; name: string; base: string; acc: string | null; fx: string[]; tags: string[]; dept: 'all' | 'girls'; colors: string[] }
+const CATALOG = ITEMS as Item[];
+const BY_ID = Object.fromEntries(CATALOG.map(it => [it.id, it]));
 const draw = sprite as (o: Outfit, mood: string, pose: string, av: Avatar) => string;
 const icon = itemSprite as (kind: string, av: Avatar) => string;
-const named = nameOf as (kind: string, av: Avatar) => string;
-const colourOf = palOf as (av: Avatar, kind: string) => string[];
 
-// the style filters (the brands they're like show up as hints)
-const TAG: Record<string, string> = { casual: 'everyday', surf: 'beachy', minimal: 'minimal', sporty: 'athletic', street: 'graphic & street', preppy: 'preppy', cozy: 'cozy' };
-
-// aisles: one kind of piece each (Jev decides which kind the weather calls for; this decides which one snug owns),
-// and what snug models while you browse it
-const nothing = { outer: 'none', acc: [] as string[] };
-const SECTIONS: { label: string; aisles: { kind: string; label: string; show: Outfit }[] }[] = [
-  { label: 'tops', aisles: [
-    { kind: 'tee', label: 'tees', show: { top: 'tee', bottom: 'pants', ...nothing } },
-    { kind: 'tank', label: 'tanks', show: { top: 'tank', bottom: 'shorts', ...nothing } },
-    { kind: 'long', label: 'long sleeves', show: { top: 'long', bottom: 'pants', ...nothing } },
-    { kind: 'sweater', label: 'sweaters', show: { top: 'sweater', bottom: 'pants', ...nothing } },
-  ] },
-  { label: 'outerwear', aisles: [
-    { kind: 'light', label: 'jackets', show: { top: 'tee', outer: 'light', bottom: 'pants', acc: [] } },
-    { kind: 'hoodie', label: 'hoodies', show: { top: 'tee', outer: 'hoodie', bottom: 'pants', acc: [] } },
-    { kind: 'coat', label: 'winter coats', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: [] } },
-    { kind: 'rain', label: 'rain jackets', show: { top: 'tee', outer: 'rain', bottom: 'pants', acc: [] } },
-  ] },
-  { label: 'bottoms', aisles: [
-    { kind: 'pants', label: 'pants', show: { top: 'tee', bottom: 'pants', ...nothing } },
-    { kind: 'shorts', label: 'shorts', show: { top: 'tee', bottom: 'shorts', ...nothing } },
-  ] },
-  { label: 'shoes', aisles: [{ kind: 'shoe', label: 'shoes', show: { top: 'tee', bottom: 'shorts', ...nothing } }] },
-  { label: 'extras', aisles: [
-    { kind: 'beanie', label: 'beanies', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: ['beanie'] } },
-    { kind: 'scarf', label: 'scarves', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: ['scarf'] } },
-  ] },
+const plain = { outer: 'none', acc: [] as string[] };
+// each aisle is one kind of piece Jev can call for (Jev picks the kind for the weather; the closet picks which one),
+// and what snug models while you're in it
+const AISLES: { kind: string; label: string; show: Outfit }[] = [
+  { kind: 'tee', label: 'tees', show: { top: 'tee', bottom: 'pants', ...plain } },
+  { kind: 'tank', label: 'tanks', show: { top: 'tank', bottom: 'shorts', ...plain } },
+  { kind: 'long', label: 'long sleeves', show: { top: 'long', bottom: 'pants', ...plain } },
+  { kind: 'sweater', label: 'sweaters', show: { top: 'sweater', bottom: 'pants', ...plain } },
+  { kind: 'light', label: 'jackets', show: { top: 'tee', outer: 'light', bottom: 'pants', acc: [] } },
+  { kind: 'hoodie', label: 'hoodies', show: { top: 'tee', outer: 'hoodie', bottom: 'pants', acc: [] } },
+  { kind: 'coat', label: 'coats', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: [] } },
+  { kind: 'rain', label: 'rain gear', show: { top: 'tee', outer: 'rain', bottom: 'pants', acc: [] } },
+  { kind: 'pants', label: 'pants', show: { top: 'tee', bottom: 'pants', ...plain } },
+  { kind: 'shorts', label: 'shorts', show: { top: 'tee', bottom: 'shorts', ...plain } },
+  { kind: 'shoe', label: 'shoes', show: { top: 'tee', bottom: 'shorts', ...plain } },
+  { kind: 'beanie', label: 'hats', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: ['beanie'] } },
+  { kind: 'scarf', label: 'scarves', show: { top: 'sweater', outer: 'coat', bottom: 'pants', acc: ['scarf'] } },
+  { kind: 'sunglasses', label: 'sunglasses', show: { top: 'tee', bottom: 'shorts', outer: 'none', acc: ['sunglasses'] } },
+  { kind: 'umbrella', label: 'umbrellas', show: { top: 'tee', outer: 'rain', bottom: 'pants', acc: ['umbrella'] } },
 ];
-const AISLE_LABEL: Record<string, string> = Object.fromEntries(SECTIONS.flatMap(s => s.aisles.map(a => [a.kind, a.label])));
+const LABEL = Object.fromEntries(AISLES.map(a => [a.kind, a.label]));
+const KIT_LIST = KITS as { id: string; label: string }[];
+const kitOf = kitWardrobe as (id: string, body: string) => Record<string, Piece[]>;
+const STYLE_FIT: Outfit = { top: 'tee', outer: 'light', bottom: 'pants', acc: [] };
 
-interface Item { kind: string; s: string; name: string }
-/** Every distinct version of a kind across the styles (a puffer, a teddy coat, a trench...). */
-function catalog(kind: string): Item[] {
-  const seen = new Set<string>(), out: Item[] = [];
-  for (const s of Object.keys(ST)) {
-    const name = named(kind, { ...(AV_DEFAULT as Avatar), style: s, skirt: false, wardrobe: {} });
-    const sig = name + JSON.stringify(ST[s].pal?.[kind] ?? null) + (ST[s].det?.[kind] ?? '');
-    if (!seen.has(sig)) { seen.add(sig); out.push({ kind, s, name }); }
-  }
-  return out;
-}
+type Pick = Piece & { kind: string };
+const same = (a: Piece, b: Piece) => a.id === b.id && (a.c ?? null) === (b.c ?? null);
+const asList = (v: Piece | Piece[] | undefined): Piece[] => (!v ? [] : Array.isArray(v) ? v : [v]);
+const nameOf = (p: Piece) => (p.id && BY_ID[p.id]?.name) || 'piece';
 
-const btn: CSSProperties = { padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 };
-const Plank = ({ onClick, children, disabled }: { onClick: () => void; children: React.ReactNode; disabled?: boolean }) => (
-  <button onClick={onClick} disabled={disabled} style={{ padding: 4, background: WOOD, clipPath: CP, opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
-    <span style={{ display: 'block', padding: '8px 16px', background: PLANK, clipPath: CP, color: LIGHT, fontSize: 15, fontWeight: 800, textShadow: `2px 2px 0 ${WOOD}`, whiteSpace: 'nowrap' }}>{children}</span>
+const btn: CSSProperties = { padding: '6px 8px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap', flex: 'none' };
+const Plank = ({ onClick, children, disabled, wide }: { onClick: () => void; children: ReactNode; disabled?: boolean; wide?: boolean }) => (
+  <button onClick={onClick} disabled={disabled} style={{ padding: 4, background: WOOD, clipPath: CP, opacity: disabled ? 0.45 : 1, cursor: disabled ? 'not-allowed' : 'pointer', width: wide ? '100%' : undefined, flex: 'none' }}>
+    <span style={{ display: 'block', padding: '9px 16px', background: PLANK, clipPath: CP, color: LIGHT, fontSize: 15, fontWeight: 800, textShadow: `2px 2px 0 ${WOOD}`, whiteSpace: 'nowrap' }}>{children}</span>
   </button>
 );
+const rope: CSSProperties = { width: 3, height: 10, background: 'repeating-linear-gradient(180deg,#7a5634 0 3px,#5e3c20 3px 6px)' };
 
-/** A pixel shopping cart with what's been picked up piled in the basket. */
+/** A pixel shopping cart with what's been picked up piled in it. */
 function Cart({ items, bump }: { items: string[]; bump: number }) {
   return (
-    <div key={bump} style={{ position: 'relative', width: 96, height: 76, animation: bump ? 'snug-cart .45s' : undefined }}>
-      <svg viewBox="0 0 32 25" width={96} height={75} shapeRendering="crispEdges" style={{ position: 'absolute', left: 0, bottom: 0 }} aria-hidden>
-        <rect x="0" y="5" width="5" height="1.4" fill="#5b5e6b" /><rect x="4" y="5" width="1.4" height="5" fill="#5b5e6b" />
-        <path d="M5 9 H31 L28 19 H8 Z" fill="rgba(200,206,220,0.35)" stroke="#7d8290" strokeWidth="1.2" />
+    <div key={bump} style={{ position: 'relative', width: 84, height: 66, animation: bump ? 'shop-cart .45s' : undefined }}>
+      <svg viewBox="0 0 32 25" width={84} height={66} shapeRendering="crispEdges" style={{ position: 'absolute', left: 0, bottom: 0 }} aria-hidden>
+        <rect x="0" y="5" width="5" height="1.4" fill="#4b4e58" /><rect x="4" y="5" width="1.4" height="5" fill="#4b4e58" />
+        <path d="M5 9 H31 L28 19 H8 Z" fill="rgba(210,214,224,0.35)" stroke="#7d8290" strokeWidth="1.2" />
         {[10, 14, 18, 22, 26].map(x => <rect key={x} x={x} y="9.5" width="0.8" height="9" fill="#a3a8b6" />)}
         <rect x="6.5" y="13.6" width="23" height="0.8" fill="#a3a8b6" />
-        <rect x="8" y="19" width="20" height="1.2" fill="#5b5e6b" /><rect x="8" y="20" width="1.2" height="2" fill="#5b5e6b" /><rect x="26.8" y="20" width="1.2" height="2" fill="#5b5e6b" />
+        <rect x="8" y="19" width="20" height="1.2" fill="#4b4e58" />
         <circle cx="10" cy="23" r="1.8" fill="#2b2b30" /><circle cx="26" cy="23" r="1.8" fill="#2b2b30" />
       </svg>
-      {items.slice(-5).map((src, i) => (
-        <img key={i} src={src} alt="" style={{ position: 'absolute', left: 20 + (i % 3) * 20 - (i >= 3 ? -10 : 0), bottom: 26 + (i >= 3 ? 14 : 0) + (i % 2) * 4, width: 34, height: 29, imageRendering: 'pixelated', transform: `rotate(${(i % 2 ? 8 : -6)}deg)`, animation: i === items.slice(-5).length - 1 && bump ? 'snug-drop .35s both' : undefined }} />
+      {items.slice(-5).map((src, i, a) => (
+        <img key={i} src={src} alt="" style={{ position: 'absolute', left: 16 + (i % 3) * 17 + (i >= 3 ? 8 : 0), bottom: 24 + (i >= 3 ? 12 : 0) + (i % 2) * 3, width: 30, height: 26, imageRendering: 'pixelated', transform: `rotate(${i % 2 ? 9 : -7}deg)`, animation: i === a.length - 1 && bump ? 'shop-drop .35s both' : undefined }} />
       ))}
     </div>
   );
 }
 
+/** The colour cards for one piece: swipe, or use the arrow keys, through the colours it comes in. */
+function ColourCards({ item, av, index, onIndex }: { item: Item; av: (p: Piece) => Avatar; index: number; onIndex: (i: number) => void }) {
+  const touch = useRef<number | null>(null);
+  const n = item.colors.length, go = (d: number) => onIndex((index + d + n) % n);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => { if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); go(1); } };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  });
+  const arrow = (d: number) => (
+    <button onClick={() => go(d)} aria-label={d < 0 ? 'previous colour' : 'next colour'} style={{ width: 36, height: 48, flex: 'none', padding: 3, background: WOOD, clipPath: CP }}>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: PLANK, clipPath: CP, color: LIGHT, fontSize: 20, fontWeight: 900 }}>{d < 0 ? '‹' : '›'}</span>
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {arrow(-1)}
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
+        onTouchStart={e => { touch.current = e.touches[0].clientX; }}
+        onTouchEnd={e => { if (touch.current == null) return; const dx = e.changedTouches[0].clientX - touch.current; touch.current = null; if (Math.abs(dx) > 30) go(dx < 0 ? 1 : -1); }}>
+        <div style={{ display: 'flex', transform: `translateX(${-index * 100}%)`, transition: 'transform .28s cubic-bezier(.2,.8,.2,1)' }}>
+          {item.colors.map((c, i) => (
+            <div key={c} style={{ flex: '0 0 100%', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ width: 'min(200px, 100%)', padding: 4, background: WOOD, clipPath: CP, transform: i === index ? 'none' : 'scale(0.92)', transition: 'transform .28s' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 8px 8px', background: CREAM, clipPath: CP }}>
+                  <img src={icon(item.kind, av(i === 0 ? { id: item.id } : { id: item.id, c }))} alt="" style={{ width: 120, height: 103, imageRendering: 'pixelated' }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: INK }}>{i === 0 ? `${c} (original)` : c}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {arrow(1)}
+    </div>
+  );
+}
+
 /**
- * snug's shop: walk the aisles, try things on, pick colours, fill the cart, check out to wear it.
- * Each pick is one kind of piece (its style's version, in a colour); anything not bought keeps the overall style.
+ * snug & co., a general store: walk the aisles, pick pieces off the shelves, swipe through their colours, fill the
+ * cart, check out. snug can own several of each kind and rotates through them day to day.
  */
 export default function ShopPanel({ initial, onDone, onClose }: { initial?: Partial<Avatar> | null; onDone: (a: Avatar) => void; onClose: () => void }) {
-  const base: Avatar = { ...(AV_DEFAULT as Avatar), ...(initial || {}), wardrobe: { ...(initial?.wardrobe || {}) } };
-  const [section, setSection] = useState(0);
+  const base: Avatar = { ...(AV_DEFAULT as Avatar), ...(initial || {}) };
+  const start = useMemo(() => Object.fromEntries(Object.entries(initial?.wardrobe || {}).map(([k, v]) => [k, asList(v)])), [initial]);
+  const [closet, setCloset] = useState<Record<string, Piece[]>>(start);
   const [kind, setKind] = useState('tee');
-  const [filter, setFilter] = useState<string | null>(null);
-  const [sel, setSel] = useState<(Piece & { kind: string }) | null>(null);
-  const [cart, setCart] = useState<Record<string, Piece>>({});
-  const [skirt, setSkirt] = useState(base.skirt);
-  const [viewCart, setViewCart] = useState(false);
+  // the department comes from who snug is: girls also see skirts and mary janes
+  const dept = base.body === 'girl' ? 'girls' : 'guys';
+  const [view, setView] = useState<'shelves' | 'cart' | 'closet' | 'styles'>(Object.keys(start).length ? 'shelves' : 'styles');
+  const [kit, setKit] = useState<string | null>(null);
+  const [open, setOpen] = useState<Item | null>(null);
+  const [ci, setCi] = useState(0);
+  const [cart, setCart] = useState<Pick[]>([]);
   const [bump, setBump] = useState(0);
+  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, []);
 
-  const aisle = SECTIONS[section].aisles.find(a => a.kind === kind) || SECTIONS[section].aisles[0];
-  const items = useMemo(() => catalog(aisle.kind), [aisle.kind]);
-  const styles = [...new Set(items.map(i => i.s))];
-  const shown = filter && styles.includes(filter) ? items.filter(i => i.s === filter) : items;
-  const owned = (k: string): Piece => base.wardrobe?.[k] ?? { s: base.style };
-  const wearing: Record<string, Piece> = { ...base.wardrobe, ...cart, ...(sel ? { [sel.kind]: { s: sel.s, ...(sel.c ? { c: sel.c } : {}) } } : {}) };
-  const preview: Avatar = { ...base, skirt, wardrobe: wearing };
-  const look = (k: string, p: Piece): Avatar => ({ ...base, skirt, wardrobe: { [k]: p } });
-  const cartList = Object.entries(cart);
-  const changed = cartList.length > 0 || skirt !== base.skirt;
+  const aisleNo = AISLES.findIndex(a => a.kind === kind), aisle = AISLES[aisleNo];
+  const shelf = CATALOG.filter(it => it.kind === kind && (dept !== 'guys' || it.dept !== 'girls'))
+    .sort((a, b) => (dept === 'girls' ? (a.dept === 'girls' ? -1 : 0) - (b.dept === 'girls' ? -1 : 0) : 0));
+  const look = (k: string, p: Piece): Avatar => ({ ...base, wardrobe: { [k]: [p] } });
+  const trying: Pick | null = open ? { kind: open.kind, id: open.id, ...(ci ? { c: open.colors[ci] } : {}) } : null;
+  const lastOf = (k: string) => [...cart].reverse().find(p => p.kind === k);
+  // snug models what's being tried on, else the newest thing in the cart for this aisle, else what they own
+  const model = trying ?? lastOf(kind);
+  const preview: Avatar = view === 'styles' && kit ? { ...base, wardrobe: kitOf(kit, base.body) } : { ...base, wardrobe: { ...closet, ...(model ? { [model.kind]: [model] } : {}) } };
+  const owned = (k: string) => closet[k] ?? [];
+  const changed = cart.length > 0 || JSON.stringify(closet) !== JSON.stringify(start);
 
-  const goSection = (i: number) => { setSection(i); setKind(SECTIONS[i].aisles[0].kind); setFilter(null); setSel(null); setViewCart(false); };
-  const goAisle = (k: string) => { setKind(k); setFilter(null); setSel(null); };
-  const addToCart = () => { if (!sel) return; setCart(c => ({ ...c, [sel.kind]: { s: sel.s, ...(sel.c ? { c: sel.c } : {}) } })); setBump(b => b + 1); setSel(null); };
-  const checkout = () => onDone({ ...base, skirt, wardrobe: { ...base.wardrobe, ...cart } });
+  const openItem = (it: Item) => { setOpen(it); setCi(0); };
+  const add = () => { if (!trying) return; if (!cart.some(p => p.kind === trying.kind && same(p, trying))) setCart(c => [...c, trying]); setBump(n => n + 1); setOpen(null); };
+  const checkout = () => {
+    const w: Record<string, Piece[]> = Object.fromEntries(Object.entries(closet).map(([k, v]) => [k, [...v]]));
+    cart.forEach(({ kind: k, ...p }) => { const l = (w[k] ||= []); if (!l.some(q => same(q, p)) && l.length < 12) l.push(p); });
+    Object.keys(w).forEach(k => { if (!w[k].length) delete w[k]; });
+    onDone({ ...base, wardrobe: w });
+  };
+  const ownedHere = trying ? owned(trying.kind).some(p => same(p, trying)) : false;
+  const inCart = trying ? cart.some(p => p.kind === trying.kind && same(p, trying)) : false;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="snug's shop"
-      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, background: 'rgba(20,14,30,0.55)', backdropFilter: 'blur(3px)', fontFamily: "'Rethink Sans',sans-serif" }}>
-      <style>{`@keyframes snug-cart{0%{transform:none}30%{transform:translateY(-6px) rotate(-3deg)}60%{transform:translateY(0) rotate(2deg)}100%{transform:none}}
-        @keyframes snug-drop{from{transform:translateY(-40px);opacity:0}to{opacity:1}}
-        @keyframes snug-hop{0%,100%{transform:none}40%{transform:translateY(-8px)}}`}</style>
-      <div style={{ width: 'min(680px, 100%)', height: 'min(100%, 880px)', padding: 5, background: WOOD, clipPath: CP, boxShadow: '0 20px 40px rgba(0,0,0,0.35)', display: 'flex' }}>
-        <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', background: WOOD_TEX, clipPath: CP }}>
+    <div role="dialog" aria-modal="true" aria-label="snug and co., the store"
+      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, background: 'rgba(20,14,10,0.55)', backdropFilter: 'blur(3px)', fontFamily: "'Rethink Sans',sans-serif" }}>
+      <style>{`@keyframes shop-cart{0%,100%{transform:none}30%{transform:translateY(-6px) rotate(-3deg)}60%{transform:rotate(2deg)}}
+        @keyframes shop-drop{from{transform:translateY(-36px);opacity:0}to{opacity:1}}
+        @keyframes shop-hop{0%,100%{transform:none}40%{transform:translateY(-6px)}}
+        @keyframes shop-pop{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+        .shop-scroll::-webkit-scrollbar{display:none}.shop-scroll{scrollbar-width:none}`}</style>
+      <div style={{ position: 'relative', width: 'min(600px, 100%)', height: 'min(100%, 880px)', padding: 5, background: WOOD, clipPath: CP, boxShadow: '0 20px 40px rgba(0,0,0,0.4)', display: 'flex' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: WOOD_TEX, clipPath: CP }}>
 
-          {/* sign, cart, leave */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}` }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, opacity: 0.85 }}>SNUG&apos;S SHOP</div>
-              <div style={{ fontSize: 20, fontWeight: 800 }}>{viewCart ? 'your cart' : AISLE_LABEL[aisle.kind]}</div>
+          {/* sign and counter */}
+          <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 12px 8px' }}>
+            <div style={{ padding: 3, background: WOOD, clipPath: CP }}>
+              <div style={{ padding: '5px 10px', background: PLANK, clipPath: CP, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}`, lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 2, opacity: 0.85 }}>GENERAL STORE</div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>snug &amp; co.</div>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button onClick={() => setViewCart(v => !v)} aria-label={`cart, ${cartList.length} items`} style={{ ...btn, background: viewCart ? '#f2c230' : btn.background, color: viewCart ? INK : LIGHT }}>🛒 {cartList.length}</button>
-              <button onClick={onClose} style={btn}>leave</button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => { setView(v => (v === 'styles' ? 'shelves' : 'styles')); setOpen(null); }} style={{ ...btn, background: view === 'styles' ? '#f2c230' : btn.background, color: view === 'styles' ? INK : LIGHT }}>styles</button>
+              <button onClick={() => { setView(v => (v === 'closet' ? 'shelves' : 'closet')); setOpen(null); }} style={{ ...btn, background: view === 'closet' ? '#f2c230' : btn.background, color: view === 'closet' ? INK : LIGHT }}>closet</button>
+              <button onClick={() => { setView(v => (v === 'cart' ? 'shelves' : 'cart')); setOpen(null); }} style={{ ...btn, background: view === 'cart' ? '#f2c230' : btn.background, color: view === 'cart' ? INK : LIGHT }}>cart {cart.length}</button>
+              <button onClick={onClose} aria-label="leave the store" style={btn}>leave</button>
             </div>
           </div>
 
-          {/* the shop floor: snug modelling this aisle, pushing the cart */}
-          <div style={{ position: 'relative', flex: 'none', height: 150, overflow: 'hidden', clipPath: CP, background: 'linear-gradient(180deg, #ecdfc6 0 78%, #c9a77a 78%)' }}>
-            <div aria-hidden style={{ position: 'absolute', inset: '0 0 22% 0', background: 'repeating-linear-gradient(180deg, transparent 0 42px, #a8743f 42px 47px, #7a5634 47px 49px)', opacity: 0.55 }} />
-            <div aria-hidden style={{ position: 'absolute', left: 10, right: 10, top: 6, display: 'flex', gap: 10, justifyContent: 'space-between', opacity: 0.5 }}>
-              {items.slice(0, 6).map(it => <img key={it.s} src={icon(it.kind, look(it.kind, { s: it.s }))} alt="" style={{ width: 36, height: 31, imageRendering: 'pixelated' }} />)}
+          {/* the shop floor: the aisle sign overhead, snug pushing the cart */}
+          <div style={{ position: 'relative', flex: 'none', height: 150, margin: '0 10px', overflow: 'hidden', clipPath: CP, background: 'linear-gradient(180deg, rgba(0,0,0,0) 72%, #c99a63 72%), repeating-linear-gradient(90deg, #7a4f2b 0 26px, #6a4324 26px 28px)' }}>
+            <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '28%', background: 'repeating-linear-gradient(90deg, #c99a63 0 46px, #b6874f 46px 48px)' }} />
+            <div aria-hidden style={{ position: 'absolute', left: 10, right: 10, top: 40, height: 5, background: '#4a2e16', boxShadow: '0 2px 0 rgba(0,0,0,0.25)' }} />
+            <div aria-hidden style={{ position: 'absolute', left: 14, right: 14, top: 14, display: 'flex', justifyContent: 'space-between', opacity: 0.85 }}>
+              {CATALOG.filter(it => it.kind === kind).slice(0, 7).map(it => <img key={it.id} src={icon(it.kind, look(it.kind, { id: it.id }))} alt="" style={{ width: 30, height: 26, imageRendering: 'pixelated' }} />)}
             </div>
-            <div style={{ position: 'absolute', left: '50%', bottom: 8, transform: 'translateX(-62%)', display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <img key={bump} src={draw(aisle.show, 'happy', 'stand', preview)} alt="snug trying it on" style={{ width: 92, height: 116, imageRendering: 'pixelated', display: 'block', animation: bump ? 'snug-hop .45s' : undefined }} />
-              <div style={{ marginLeft: -14, marginBottom: -2 }}><Cart bump={bump} items={cartList.map(([k, p]) => icon(k, look(k, p)))} /></div>
+            <div style={{ position: 'absolute', left: '50%', top: 48, transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 46 }}><span style={rope} /><span style={rope} /></div>
+              <div style={{ padding: 2, background: WOOD, clipPath: CP }}>
+                <div style={{ padding: '2px 10px', background: '#f2c230', clipPath: CP, color: INK, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>{view === 'shelves' ? `aisle ${aisleNo + 1} · ${aisle.label}` : view === 'cart' ? 'checkout' : view === 'styles' ? 'quick styles' : 'your closet'}</div>
+              </div>
+            </div>
+            <div style={{ position: 'absolute', left: '50%', bottom: 8, transform: 'translateX(-64%)', display: 'flex', alignItems: 'flex-end' }}>
+              <img key={`${model?.id}${model?.c}${bump}`} src={draw(aisle.show, 'happy', 'stand', preview)} alt="snug trying it on" style={{ width: 80, height: 101, imageRendering: 'pixelated', display: 'block', animation: 'shop-hop .4s' }} />
+              <div style={{ marginLeft: -10, marginBottom: -2 }}><Cart bump={bump} items={cart.map(p => icon(p.kind, look(p.kind, p)))} /></div>
             </div>
           </div>
 
-          {viewCart ? (
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {cartList.length === 0 && <div style={{ color: LIGHT, fontWeight: 700, textShadow: `1px 1px 0 ${WOOD}`, padding: '8px 2px' }}>nothing in the cart yet.</div>}
-              {cartList.map(([k, p]) => (
-                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: CREAM, clipPath: CP }}>
-                  <img src={icon(k, look(k, p))} alt="" style={{ width: 56, height: 48, imageRendering: 'pixelated' }} />
-                  <div style={{ flex: 1, color: INK }}>
-                    <div style={{ fontWeight: 800 }}>{named(k, look(k, p))}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>{AISLE_LABEL[k]} · {TAG[p.s] || p.s}{p.c ? ` · ${p.c}` : ''}</div>
-                  </div>
-                  <button aria-label={`take ${named(k, look(k, p))} out of the cart`} onClick={() => setCart(c => { const n = { ...c }; delete n[k]; return n; })} style={{ ...btn, background: 'rgba(30,18,8,0.75)' }}>×</button>
-                </div>
-              ))}
-              {skirt !== base.skirt && <div style={{ color: LIGHT, fontSize: 13, fontWeight: 700, textShadow: `1px 1px 0 ${WOOD}` }}>{skirt ? '+ wearing skirts' : '+ back to shorts and pants'}</div>}
-            </div>
-          ) : (
+          {view === 'shelves' ? (
             <>
-              {/* sections, then aisles, then style filters */}
-              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flex: 'none', paddingBottom: 2 }}>
-                {SECTIONS.map((s, i) => <Chip key={s.label} on={i === section} onClick={() => goSection(i)}>{s.label}</Chip>)}
-              </div>
-              {SECTIONS[section].aisles.length > 1 && (
-                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flex: 'none' }}>
-                  {SECTIONS[section].aisles.map(a => (
-                    <button key={a.kind} onClick={() => goAisle(a.kind)} aria-pressed={a.kind === aisle.kind}
-                      style={{ ...btn, background: a.kind === aisle.kind ? 'rgba(242,194,48,0.9)' : btn.background, color: a.kind === aisle.kind ? INK : LIGHT, whiteSpace: 'nowrap' }}>{a.label}</button>
-                  ))}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', flex: 'none', alignItems: 'center' }}>
-                <span style={{ color: LIGHT, fontSize: 12, fontWeight: 800, textShadow: `1px 1px 0 ${WOOD}`, flex: 'none' }}>style</span>
-                <button onClick={() => setFilter(null)} style={{ ...btn, padding: '4px 10px', fontSize: 12, background: !filter ? CREAM : btn.background, color: !filter ? INK : LIGHT }}>all</button>
-                {styles.map(s => <button key={s} onClick={() => setFilter(f => (f === s ? null : s))} title={ST[s].label} style={{ ...btn, padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', background: filter === s ? CREAM : btn.background, color: filter === s ? INK : LIGHT }}>{TAG[s] || s}</button>)}
-                {(aisle.kind === 'shorts' || aisle.kind === 'pants') && base.body === 'girl' && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 6, color: LIGHT, fontSize: 12, fontWeight: 800, textShadow: `1px 1px 0 ${WOOD}`, whiteSpace: 'nowrap' }}>
-                    <input type="checkbox" checked={skirt} onChange={e => setSkirt(e.target.checked)} /> wear skirts
-                  </label>
-                )}
-              </div>
-
-              {/* the rack */}
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 8, alignContent: 'start', paddingRight: 2 }}>
-                {shown.map(it => {
-                  const on = sel?.kind === it.kind && sel.s === it.s, mine = owned(it.kind), inCart = cart[it.kind]?.s === it.s;
-                  const p: Piece = on && sel?.c ? { s: it.s, c: sel.c } : { s: it.s };
+              {/* aisle signs */}
+              <div className="shop-scroll" style={{ flex: 'none', display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 12px 2px' }}>
+                {AISLES.map((a, i) => {
+                  const on = a.kind === kind;
                   return (
-                    <button key={it.s} onClick={() => setSel(on ? null : { kind: it.kind, s: it.s })} aria-pressed={on}
-                      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '10px 6px 8px', background: on ? '#f2c230' : CREAM, clipPath: CP, color: INK, boxShadow: on ? `inset 0 0 0 3px ${WOOD}` : 'none' }}>
-                      <img src={icon(it.kind, look(it.kind, p))} alt="" style={{ width: 56, height: 48, imageRendering: 'pixelated' }} />
-                      <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1.15, textAlign: 'center' }}>{it.name}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.65 }}>{TAG[it.s] || it.s}</span>
-                      {(inCart || mine.s === it.s) && <span style={{ position: 'absolute', top: 4, right: 6, fontSize: 10, fontWeight: 800, color: inCart ? '#2f6b2f' : '#6b4a33' }}>{inCart ? 'in cart' : 'yours'}</span>}
+                    <button key={a.kind} onClick={() => { setKind(a.kind); setOpen(null); }} aria-pressed={on} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
+                      <div style={{ display: 'flex', gap: 22 }}><span style={{ ...rope, height: 7 }} /><span style={{ ...rope, height: 7 }} /></div>
+                      <span style={{ padding: 2, background: WOOD, clipPath: CP }}>
+                        <span style={{ display: 'block', padding: '4px 10px', background: on ? '#f2c230' : PLANK, clipPath: CP, color: on ? INK : LIGHT, fontSize: 12, fontWeight: 800, textShadow: on ? 'none' : `1px 1px 0 ${WOOD}`, whiteSpace: 'nowrap' }}>
+                          <span style={{ opacity: 0.7, marginRight: 4 }}>{i + 1}</span>{a.label}
+                        </span>
+                      </span>
                     </button>
                   );
                 })}
               </div>
+              {/* the shelves */}
+              <div className="shop-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '4px 10px 0', padding: '6px 4px 10px', background: 'repeating-linear-gradient(90deg, #5e3b1e 0 30px, #55351b 30px 32px)', clipPath: CP }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                  {shelf.map(it => {
+                    const mine = owned(it.kind).filter(p => p.id === it.id).length, carted = cart.some(p => p.id === it.id);
+                    return (
+                      <button key={it.id} onClick={() => openItem(it)} aria-label={it.name} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 2px 0' }}>
+                        <img src={icon(it.kind, look(it.kind, { id: it.id }))} alt="" style={{ width: 62, height: 53, imageRendering: 'pixelated', display: 'block', filter: 'drop-shadow(0 3px 2px rgba(0,0,0,0.3))' }} />
+                        {/* the shelf board under each row of things */}
+                        <span aria-hidden style={{ alignSelf: 'stretch', height: 7, marginTop: 2, background: PLANK, boxShadow: `0 3px 0 ${WOOD}` }} />
+                        <span style={{ marginTop: 7, marginBottom: 8, padding: '3px 7px', maxWidth: '96%', background: CREAM, clipPath: CP, color: INK, fontSize: 11, fontWeight: 800, lineHeight: 1.15, textAlign: 'center' }}>{it.name}</span>
+                        {(mine > 0 || carted) && <span style={{ position: 'absolute', top: 4, right: 6, padding: '1px 5px', background: carted ? '#f2c230' : CREAM, color: INK, fontSize: 9.5, fontWeight: 800, clipPath: CP }}>{carted ? 'in cart' : mine > 1 ? `own ${mine}` : 'owned'}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </>
+          ) : view === 'styles' ? (
+            // a whole look in one tap
+            <div className="shop-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 10px 4px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 8, alignContent: 'start' }}>
+              {KIT_LIST.map(k => {
+                const on = kit === k.id;
+                return (
+                  <button key={k.id} onClick={() => setKit(on ? null : k.id)} aria-pressed={on} style={{ padding: 3, background: WOOD, clipPath: CP }}>
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '8px 4px 6px', background: on ? '#f2c230' : CREAM, clipPath: CP }}>
+                      <img src={draw(STYLE_FIT, 'happy', 'stand', { ...base, wardrobe: kitOf(k.id, base.body) })} alt="" style={{ width: 64, height: 81, imageRendering: 'pixelated' }} />
+                      <span style={{ fontSize: 13, fontWeight: 800, color: INK }}>{k.label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="shop-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '10px 10px 0', padding: 3, background: WOOD, clipPath: CP }}>
+              <div style={{ minHeight: '100%', padding: '10px 12px', background: CREAM, clipPath: CP, color: INK }}>
+                {view === 'cart' ? (
+                  <>
+                    {cart.length === 0 && <div style={{ fontWeight: 700, opacity: 0.7, padding: '8px 0' }}>the cart is empty.</div>}
+                    {cart.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: i ? '2px dashed rgba(74,46,22,0.2)' : 'none' }}>
+                        <img src={icon(p.kind, look(p.kind, p))} alt="" style={{ width: 46, height: 40, imageRendering: 'pixelated' }} />
+                        <div style={{ flex: 1 }}><div style={{ fontWeight: 800 }}>{nameOf(p)}</div><div style={{ fontSize: 12, fontWeight: 700, opacity: 0.65 }}>{LABEL[p.kind]} · {p.c ?? BY_ID[p.id!]?.base}</div></div>
+                        <button aria-label={`put back the ${nameOf(p)}`} onClick={() => setCart(c => c.filter((_, j) => j !== i))} style={{ ...btn, padding: '4px 10px' }}>×</button>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {AISLES.filter(a => owned(a.kind).some(p => p.id)).length === 0 && <div style={{ fontWeight: 700, opacity: 0.7, padding: '8px 0' }}>nothing from the store yet.</div>}
+                    {AISLES.filter(a => owned(a.kind).some(p => p.id)).map(a => (
+                      <div key={a.kind} style={{ padding: '6px 0', borderTop: '2px dashed rgba(74,46,22,0.2)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.7, marginBottom: 4 }}>{a.label}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {owned(a.kind).map((p, i) => p.id ? (
+                            <div key={i} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: 76 }}>
+                              <img src={icon(a.kind, look(a.kind, p))} alt="" style={{ width: 52, height: 45, imageRendering: 'pixelated' }} />
+                              <span style={{ fontSize: 10.5, fontWeight: 800, textAlign: 'center', lineHeight: 1.1 }}>{nameOf(p)}</span>
+                              <button aria-label={`take the ${nameOf(p)} out of the closet`} onClick={() => setCloset(c => ({ ...c, [a.kind]: owned(a.kind).filter((_, j) => j !== i) }))}
+                                style={{ position: 'absolute', top: -2, right: 6, width: 20, height: 20, background: 'rgba(30,18,8,0.7)', color: LIGHT, fontSize: 12, fontWeight: 800, clipPath: CP }}>×</button>
+                            </div>
+                          ) : null)}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
           )}
 
-          {/* the picked piece: colour, and into the cart; or check out */}
-          <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 2 }}>
-            {!viewCart && sel && (
-              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', alignItems: 'center', paddingBottom: 2 }}>
-                <span style={{ color: LIGHT, fontSize: 12, fontWeight: 800, textShadow: `1px 1px 0 ${WOOD}`, flex: 'none' }}>colour</span>
-                <Swatch c={colourOf(look(sel.kind, { s: sel.s }), sel.kind)[0]} on={!sel.c} onClick={() => setSel({ ...sel, c: undefined })} title="its own colour" />
-                {Object.entries(COL).map(([name, c]) => <Swatch key={name} c={c[0]} on={sel.c === name} onClick={() => setSel({ ...sel, c: name })} title={name} />)}
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: LIGHT, fontSize: 12, fontWeight: 700, textShadow: `1px 1px 0 ${WOOD}`, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {viewCart ? (changed ? 'check out to put it all on' : '') : sel ? `${named(sel.kind, look(sel.kind, sel))}${sel.c ? ' · ' + sel.c : ''}` : 'tap something to try it on'}
-              </span>
-              {viewCart || !sel
-                ? <Plank onClick={checkout} disabled={!changed}>check out ✓</Plank>
-                : <Plank onClick={addToCart}>add to cart 🛒</Plank>}
-            </div>
+          {/* the counter: check out */}
+          <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '10px 12px 12px' }}>
+            {view === 'styles'
+              ? <Plank onClick={() => kit && onDone({ ...base, wardrobe: kitOf(kit, base.body) })} disabled={!kit}>wear this style</Plank>
+              : <Plank onClick={checkout} disabled={!changed}>check out{cart.length ? ` (${cart.length})` : ''}</Plank>}
           </div>
+
+          {/* looking at one piece: its colour cards */}
+          {open && (
+            <div onClick={() => setOpen(null)} style={{ position: 'absolute', left: 0, right: 0, top: 204, bottom: 0, display: 'flex', alignItems: 'flex-end', background: 'rgba(20,12,6,0.45)' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: 4, background: WOOD, clipPath: CP, animation: 'shop-pop .22s' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 12px 14px', background: WOOD_TEX, clipPath: CP }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}` }}>
+                    <div>
+                      <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>{LABEL[open.kind].toUpperCase()} · {open.tags.join(' · ').toUpperCase()}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800 }}>{open.name}</div>
+                    </div>
+                    <button onClick={() => setOpen(null)} aria-label="put it back" style={{ ...btn, padding: '4px 10px' }}>×</button>
+                  </div>
+                  <ColourCards item={open} index={ci} onIndex={setCi} av={p => look(open.kind, p)} />
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }} aria-hidden>
+                    {open.colors.map((c, i) => <span key={c} style={{ width: i === ci ? 16 : 7, height: 7, background: i === ci ? '#f2c230' : 'rgba(255,241,210,0.35)', transition: 'width .2s' }} />)}
+                  </div>
+                  <Plank onClick={add} disabled={inCart || ownedHere} wide>{ownedHere ? 'already in the closet' : inCart ? 'in the cart ✓' : 'put it in the cart'}</Plank>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

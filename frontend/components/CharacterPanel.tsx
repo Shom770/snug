@@ -4,8 +4,8 @@ import { CP, CREAM, INK, LIGHT, PLANK, WOOD, WOOD_TEX } from './auth';
 import { AV_DEFAULT, HAIRC, HAIRS, SKINS, sprite } from '../lib/engine';
 
 /** One piece snug owns: which style's version of a kind of clothing, in an optional shop colour. */
-export interface Piece { s: string; c?: string }
-export interface Avatar { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean; wardrobe?: Record<string, Piece> }
+export interface Piece { id?: string; s?: string; c?: string }
+export interface Avatar { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean; wardrobe?: Record<string, Piece | Piece[]> }
 export type Outfit = { top: string; outer: string; bottom: string; acc: string[] };
 
 const SK = SKINS as Record<string, string[]>, HC = HAIRC as Record<string, string[]>;
@@ -81,7 +81,6 @@ export default function CharacterPanel({ initial, mode, onDone, onSkip }: {
             <style>{'@keyframes snug-step{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'}</style>
             {STEPS[step].body}
           </div>
-          {mode === 'onboard' && <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: LIGHT, textShadow: `1px 1px 0 ${WOOD}` }}>you'll pick their clothes at the shop 🛍</div>}
 
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
             <button onClick={onSkip} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>{mode === 'onboard' ? 'skip' : 'cancel'}</button>

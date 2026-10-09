@@ -26,8 +26,10 @@ class Tuning(BaseModel):
 
 
 class Piece(BaseModel):
-    """One piece snug owns: which style's version of it, in an optional colour (names from the frontend's catalog)."""
-    s: str = Field(max_length=16)
+    """One piece snug owns: a closet item (id) or, from before the closet, a style's version of it (s), in an optional
+    colour. Names come from the frontend's catalog (lib/closet.ts)."""
+    id: str | None = Field(None, max_length=32)
+    s: str | None = Field(None, max_length=16)
     c: str | None = Field(None, max_length=16)
 
 
@@ -39,7 +41,8 @@ class Avatar(BaseModel):
     hairColor: str = Field('darkbrown', max_length=16)
     style: str = Field('casual', max_length=16)  # the overall look, for any kind of piece not picked at the shop
     skirt: bool = False
-    wardrobe: dict[Annotated[str, StringConstraints(max_length=16)], Piece] = Field(default_factory=dict, max_length=20)  # kind -> piece
+    # kind -> the pieces snug owns of it (snug rotates through them day to day); a single piece from before still loads
+    wardrobe: dict[Annotated[str, StringConstraints(max_length=16)], Annotated[list[Piece], Field(max_length=12)] | Piece] = Field(default_factory=dict, max_length=20)
 
 
 class Prefs(BaseModel):

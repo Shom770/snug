@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Generated from Snug.dc.html — scene renderer, sprites, presets and the app logic class.
 import React from 'react';
+import { COLORS, ITEMS, ITEM, TAGS, KITS, kitWardrobe, dressFrom, applyFx, has as hasFx } from './closet';
 const DCLogic = React.Component;
 const INK='#1f1b2e',CREAM='#fbf6ec';
 const TINT=['#f6c0b4','#f8d5ae','#f4e4a6','#cfe6b0','#aee0c6'];
@@ -50,23 +51,31 @@ const STYLES={
 };
 const AV_DEFAULT={skin:'light',body:'boy',hair:'short',hairColor:'darkbrown',style:'casual',skirt:false};
 let AV={...AV_DEFAULT};
-// colours a piece can be bought in at the shop (or keep the piece's own colour)
-const COLORS={white:['#f4f2ee','#d8d4cc','#ffffff'],cream:['#efe6d6','#d6cab5','#faf5ec'],black:['#1f1f22','#141416','#34343a'],grey:['#8c8f98','#6f727a','#a9acb4'],navy:['#2f4166','#223050','#465a85'],denim:['#4a6a9a','#36507a','#6a8ab8'],sky:['#a9c4e6','#8aa8cd','#c6daf2'],green:['#4f6b3c','#3a5230','#678a52'],olive:['#7a7a52','#5f5f3e','#96966c'],tan:['#c29a6b','#a07c52','#d6b58c'],brown:['#6b4a33','#523624','#8a6447'],red:['#c4453a','#9c3329','#dc6a5f'],orange:['#e07a2c','#bd6220','#ee9a55'],yellow:['#e8b93a','#c79a22','#f2cf6a'],pink:['#f2c4cf','#dba5b2','#f9dbe2'],lavender:['#c8b6e2','#ab98c9','#dccdef']};
 // every kind of piece Jev can call for; the wardrobe picks which one of each snug owns
-const KINDS=['tank','tee','long','sweater','light','hoodie','coat','rain','shorts','pants','shoe','beanie','scarf'];
+const KINDS=['tank','tee','long','sweater','light','hoodie','coat','rain','shorts','pants','shoe','beanie','scarf','sunglasses','umbrella'];
 function avOf(a){const v={...AV_DEFAULT,...(a||{})};if(!SKINS[v.skin])v.skin='light';if(!HAIRC[v.hairColor])v.hairColor='darkbrown';if(!HAIRS.includes(v.hair))v.hair='short';if(!STYLES[v.style])v.style='casual';v.body=v.body==='girl'?'girl':'boy';v.skirt=!!v.skirt;
-  const w={};Object.entries(v.wardrobe||{}).forEach(([k,it])=>{if(KINDS.includes(k)&&it&&STYLES[it.s])w[k]=COLORS[it.c]?{s:it.s,c:it.c}:{s:it.s};});v.wardrobe=w;return v;}
+  const w={},day=Math.floor((Date.now()-new Date().getTimezoneOffset()*60000)/86400000);
+  Object.entries(v.wardrobe||{}).forEach(([k,raw])=>{if(!KINDS.includes(k)||!raw)return;const list=[];(Array.isArray(raw)?raw:[raw]).forEach(it=>{if(!it)return;const c=COLORS[it.c]?{c:it.c}:{};if(ITEM[it.id]&&ITEM[it.id].kind===k)list.push({id:it.id,...c});else if(STYLES[it.s])list.push({s:it.s,...c});});
+    if(list.length)w[k]=list;});
+  // owning several of a kind, snug changes day to day, with one vibe across the outfit (see dressFrom)
+  v.wardrobe=w;v.worn=dressFrom(w,day,KINDS);return v;}
 function setAvatar(a){AV=avOf(a);}
-const avKey=a=>[a.skin,a.body,a.hair,a.hairColor,a.style,a.skirt?1:0,KINDS.map(k=>{const w=(a.wardrobe||{})[k];return w?w.s+(w.c?':'+w.c:''):'';}).join(',')].join('.');
+const avKey=a=>[a.skin,a.body,a.hair,a.hairColor,a.style,a.skirt?1:0,KINDS.map(k=>{const w=wornOf(a)[k];return w?(w.id||w.s)+(w.c?':'+w.c:''):'';}).join(',')].join('.');
 // a piece's style (what it is and its details) and colour: the wardrobe's pick, else the overall style
-const styleOf=(a,k)=>{const w=(a.wardrobe||{})[k];return w&&STYLES[w.s]?w.s:a.style;};
-const palOf=(a,k)=>{const w=(a.wardrobe||{})[k];if(w&&COLORS[w.c])return COLORS[w.c];return (STYLES[styleOf(a,k)].pal||{})[k]||C3[k];};
-const detsOf=a=>{const d={};KINDS.forEach(k=>{const v=(STYLES[styleOf(a,k)].det||{})[k];if(v)d[k]=v;});return d;};
+// a closet piece (bought at the shop) for a kind, if snug owns one
+const wornOf=a=>a.worn||avOf(a).worn;
+const itemOf=(a,k)=>{const w=wornOf(a)[k];return w&&w.id?ITEM[w.id]||null:null;};
+const styleOf=(a,k)=>{const w=wornOf(a)[k];return w&&STYLES[w.s]?w.s:a.style;};
+const DEFPAL={sunglasses:['#15131d','#15131d','#5b5780'],umbrella:null};
+const palOf=(a,k)=>{const w=wornOf(a)[k];if(w&&COLORS[w.c])return COLORS[w.c];const it=itemOf(a,k);if(it)return COLORS[it.base];return (STYLES[styleOf(a,k)].pal||{})[k]||C3[k]||DEFPAL[k]||C3.umb;};
+const accOf=(a,k)=>{const it=itemOf(a,k);return it&&it.acc?COLORS[it.acc]:null;};
+// the old per-style details, for anything not bought as a closet piece
+const detsOf=a=>{const d={};KINDS.forEach(k=>{if(itemOf(a,k))return;const v=(STYLES[styleOf(a,k)].det||{})[k];if(v)d[k]=v;});return d;};
 const DEF_NAMES={tank:'tank',tee:'tee',long:'long sleeve',sweater:'sweater',light:'light jacket',hoodie:'hoodie',coat:'coat',rain:'rain jacket',shorts:'shorts',pants:'pants',shoe:'sneakers'};
 // with "skirts" on: shorts become a skirt, and pants a skirt with tights unless it's coat weather
 const TIGHTS=['#3a3448','#2a2536','#4f485f'];
-function skirtKind(o,a){a=a||AV;return !a.skirt?null:o.bottom==='shorts'?'shorts':o.bottom==='pants'&&o.outer!=='coat'?'tights':null;}
-function nameOf(k,a){a=a||AV;if(k==='shorts'&&a.skirt)return 'skirt';if(k==='tights')return 'skirt & tights';return (STYLES[styleOf(a,k)].names||{})[k]||DEF_NAMES[k]||k;}
+function skirtKind(o,a){a=a||AV;const it=itemOf(a,o.bottom);if(it)return hasFx(it,'skirt')?(o.bottom==='shorts'?'shorts':'tights'):null;return !a.skirt?null:o.bottom==='shorts'?'shorts':o.bottom==='pants'&&o.outer!=='coat'?'tights':null;}
+function nameOf(k,a){a=a||AV;const it=itemOf(a,k);if(it)return it.name;if(k==='shorts'&&a.skirt)return 'skirt';if(k==='tights')return 'skirt & tights';return (STYLES[styleOf(a,k)].names||{})[k]||DEF_NAMES[k]||k;}
 
 // 46x58 sprite. pose: stand | sit | kite. av: who snug is (skin, hair, style...), defaults to the current avatar
 function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stringify(o)+mood+pose+avKey(A),()=>{
@@ -85,6 +94,7 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   const handL=E(11,37,1.8,2),handR=kite?E(30,8,1.8,2):E(28.5,37,1.8,2);
   const girl=A.body==='girl',torso=girl?Tz(22,36,12,27,15,24):Tz(22,36,12,27,14,25);
   const skirt=!!skirtKind(o,A),LEG=skirtKind(o,A)==='tights'?TIGHTS:SKINS[A.skin];
+  const IT=k=>itemOf(A,k),ACC=k=>accOf(A,k),RR=r=>({x0:0,x1:W-1,y0:0,y1:H-1,neck:[],collar:[],turtle:[],lapels:[],fur:[],pockets:[],armX:[-9,-9],sideX:[-9,-9],cuffY:999,waist:-9,hem:H-1,cx:19,chest:[19,28],...r});
   if(has('umbrella')&&!sit&&!kite){g.r(28,6,1,32,'#1c1a28');P(28,38,'#1c1a28');P(27,39,'#1c1a28');P(26,39,'#1c1a28');P(25,38,'#1c1a28');}
   // hair that sits behind the head
   if(A.hair==='afro'){part(E(20,10.5,11.5,10),HR);for(let i=0;i<22;i++){const x=9+((i*7)%23),y=2+((i*5)%13);if(E(20,10.5,11,9.5)(x,y))P(x,y,i%3?HR[1]:HR[2]);}}
@@ -101,8 +111,17 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
       if(DET.pants==='pockets'){g.r(14,42,2,3,BOT[1]);g.r(24,42,2,3,BOT[1]);}
       if(DET.pants==='joggers'){g.r(15,50,4,2,BOT[1]);g.r(21,50,4,2,BOT[1]);}
       if(DET.pants==='ribs')for(let y=39;y<=50;y++)for(const x of [15,17,22,24])P(x,y,BOT[1]);}
+    {const it=IT(o.bottom);if(it){const wide=hasFx(it,'wide')&&!skirt&&o.bottom==='pants';if(wide)part(U(hips,Tz(39,51,14,18,12,18),Tz(39,51,21,25,21,27)),BOT);
+      const m=skirt?Tz(36,45,14,25,11,28):o.bottom==='shorts'?U(hips,Tz(39,44,14,18,14,18),Tz(39,44,21,25,21,25)):U(hips,Tz(39,51,14,18,wide?12:15,18),Tz(39,51,21,25,21,wide?27:24));
+      applyFx(P,it,RR({all:m,x0:10,x1:30,y0:36,y1:51,hem:skirt?45:o.bottom==='shorts'?44:51,legs:[[16,23]],thighY:41,kneeY:46,sideX:[14,25],pockets:[[15,40],[16,40],[23,40],[24,40]],chest:[19,40]}),BOT,ACC(o.bottom));}}
     part(U(Rc(13,52,18,54),Rc(12,53,12,54)),SHOE);part(U(Rc(21,52,26,54),Rc(27,53,27,54)),SHOE);
-    const sole=DET.shoe==='chunky'?'#b9b5ab':styleOf(A,'shoe')==='minimal'?'#f2efe8':'#8f877a';g.r(12,55,7,1,sole);g.r(21,55,7,1,sole);if(DET.shoe==='chunky'){g.r(12,56,7,1,sole);g.r(21,56,7,1,sole);}
+    {const it=IT('shoe');if(it){const S2=ACC('shoe')||['#f4f2ee','#d8d4cc','#ffffff'],shoeM=U(Rc(13,52,18,54),Rc(12,53,12,54),Rc(21,52,26,54),Rc(27,53,27,54));
+      if(hasFx(it,'boot')||hasFx(it,'hightop')){const top=hasFx(it,'boot')?47:49;part(U(Rc(13,top,18,52),Rc(21,top,26,52)),SHOE);if(hasFx(it,'hightop')){g.r(13,50,6,1,S2[0]);g.r(21,50,6,1,S2[0]);}}
+      if(hasFx(it,'check'))for(let y=47;y<=54;y++)for(let x=12;x<=27;x++)if(shoeM(x,y)&&(x+y)%2)P(x,y,S2[0]);
+      if(hasFx(it,'swoosh')){[[14,53],[15,53],[16,52],[22,53],[23,53],[24,52]].forEach(([x,y])=>P(x,y,S2[0]));}
+      if(hasFx(it,'strap')){g.r(13,52,6,1,'#1c1a28');g.r(21,52,6,1,'#1c1a28');}
+      if(hasFx(it,'flat')&&!hasFx(it,'strap')){P(15,53,'#d9b45a');P(23,53,'#d9b45a');}}}
+    const sole=DET.shoe==='chunky'?'#b9b5ab':styleOf(A,'shoe')==='minimal'?'#f2efe8':'#8f877a';g.r(12,55,7,1,sole);g.r(21,55,7,1,sole);if(DET.shoe==='chunky'||hasFx(IT('shoe'),'chunky')){g.r(12,56,7,1,sole);g.r(21,56,7,1,sole);}
     if(DET.shoe==='accent'){g.r(14,53,3,1,'#e04848');g.r(22,53,3,1,'#e04848');}}
   part(armL,SK);part(armR,SK);part(handL,SK);part(handR,SK);
   part(Rc(18,19,21,22),SK);
@@ -112,7 +131,7 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   if(o.top==='tee'){part(U(Tz(23,28,9,12,9,12),sleeveR),TOP);part(U(Rc(18,22,21,22),Rc(19,23,20,23)),SK);}
   if(o.top==='tank'){part(U(Tz(22,24,12,14,13,14),Tz(22,24,25,27,25,26)),SK);part(E(20,22,2.8,1.8),SK);if(DET.tank==='stripes')for(let y=26;y<=34;y+=3)for(let x=12;x<=27;x++)if(torso(x,y))P(x,y,'#f4f2ee');}
   if(o.top==='long'||o.top==='sweater'){part(armL,TOP);part(armR,TOP);cuffs(TOP[1]);g.r(18,22,4,1,TOP[1]);}
-  if(o.top==='long'&&!DET.long)for(let y=26;y<=34;y+=3)for(let x=12;x<=27;x++)if(torso(x,y))P(x,y,TOP[2]);
+  if(o.top==='long'&&!DET.long&&!IT('long'))for(let y=26;y<=34;y+=3)for(let x=12;x<=27;x++)if(torso(x,y))P(x,y,TOP[2]);
   if(o.top==='long'&&DET.long==='check'){for(let y=23;y<=35;y++)for(let x=9;x<=31;x++)if((torso(x,y)||armL(x,y)||armR(x,y))&&(x%4===0||y%4===0))P(x,y,TOP[1]);}
   if(o.top==='long'&&DET.long==='stripes'){for(let y=24;y<=35;y+=3)for(let x=9;x<=31;x++)if(torso(x,y)||armL(x,y)||armR(x,y))P(x,y,'#f4efe6');}
   if(o.top==='sweater'){for(let y=34;y<=36;y++)for(let x=12;x<=27;x++)if(torso(x,y)&&x%2)P(x,y,TOP[1]);
@@ -121,6 +140,9 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   if((o.top==='tee'||o.top==='long')&&DET[o.top]==='armstripe'){paint(Rc(10,24,10,35),24,o.top==='tee'?27:34,'#f4f4f4');paint(Rc(29,24,29,35),24,o.top==='tee'?27:34,'#f4f4f4');}
   if((o.top==='tee'||o.top==='long')&&DET[o.top]==='collar'){const c=o.top==='tee'?'#f4f2ee':'#f6f8fc';P(17,22,c);P(18,23,c);P(18,22,c);P(22,22,c);P(21,23,c);P(21,22,c);}
   if(o.top==='tee'&&DET.tee==='graphic'){g.r(17,26,6,4,'#e8e2d6');g.r(18,27,4,2,'#e07a2c');}
+  {const it=IT(o.top);if(it){const arms=o.top==='tee'?U(Tz(23,28,9,12,9,12),sleeveR):o.top==='tank'?null:U(armL,armR);
+    if(hasFx(it,'turtleneck'))part(Rc(17,19,22,22),TOP);
+    applyFx(P,it,RR({all:arms?U(torso,arms):torso,body:torso,arms,x0:8,x1:32,y0:22,y1:36,hem:36,chest:[20,28],neck:[[17,22],[18,22],[21,22],[22,22],[17,23],[22,23]],collar:[[17,22],[18,23],[18,22],[22,22],[21,23],[21,22]],turtle:[[17,19],[22,19],[17,21],[22,21]],cuffY:o.top==='tee'?27:34,armX:[10,29],sideX:[12,27],waist:33}),TOP,ACC(o.top));}}
   const body=len=>Tz(22,len,12,27,14,25);
   if(o.outer==='light'){part(armL,O);part(armR,O);part(N(body(37),Rc(18,22,21,37)),O);for(let y=22;y<=25;y++){P(17,y,O[1]);P(22,y,O[1]);}g.r(13,30,3,2,O[1]);cuffs(O[1]);
     if(DET.light==='lapels'||DET.light==='blazer'){P(17,23,O[1]);P(18,24,O[1]);P(22,23,O[1]);P(21,24,O[1]);}
@@ -133,6 +155,8 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
     if(DET.coat==='belt')g.r(13,33,14,2,O[1]);
     if(DET.coat==='teddy')for(let i=0;i<40;i++){const x=10+((i*7)%20),y=23+((i*11)%21);if(body(45)(x,y)||armL(x,y)||armR(x,y))P(x,y,i%2?O[2]:O[1]);}}
   if(o.outer==='rain'){part(U(body(sit?38:42),armL,armR),O);for(let y=23;y<=(sit?38:42);y++)P(20,y,O[1]);g.r(14,34,4,1,O[1]);g.r(22,34,4,1,O[1]);cuffs(O[1]);}
+  {const k=o.outer,it=k!=='none'?IT(k):null;if(it){const len=k==='light'||k==='hoodie'?37:k==='coat'?(sit?38:45):(sit?38:42),bd=body(len),front=k==='light'?Rc(18,22,21,37):null,open=k==='light'&&!hasFx(it,'closed');
+    applyFx(P,it,RR({all:U(open?N(bd,front):bd,armL,armR),body:open?N(bd,front):bd,arms:U(armL,armR),front,x0:8,x1:32,y0:22,y1:len,hem:len,chest:[open?16:20,27],lapels:[[17,23],[18,24],[22,23],[21,24]],collar:[[17,22],[18,22],[21,22],[22,22]],fur:[[16,21],[17,21],[18,21],[19,21],[20,21],[21,21],[22,21],[23,21],[15,22],[16,22],[23,22],[24,22]],cuffY:34,armX:[10,29],sideX:[13,26],waist:33,pockets:[[14,33],[15,33],[24,33],[25,33]]}),O,ACC(k));}}
   // head
   part(E(20,13,7.5,8),SK);part(E(11.8,14.5,1.2,1.8),SK);part(E(27.2,14.5,1.2,1.8),SK);
   const cap=N(E(20,11,8.6,7.6),(x,y)=>y>9);
@@ -154,11 +178,23 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   else if(mood==='grumpy'){eyes();P(14,11,HR[1]);P(25,11,HR[1]);g.r(19,18,2,1,mc);P(18,19,mc);P(21,19,mc);}
   else if(mood==='cold'){P(14,13,INK);P(15,14,INK);P(14,15,INK);P(25,13,INK);P(24,14,INK);P(25,15,INK);[[18,19],[19,18],[20,19],[21,18]].forEach(([x,y])=>P(x,y,'#6d5a9e'));P(19,16,'#e58383');P(20,16,'#e58383');g.r(13,16,3,1,'#9dbbe0');g.r(24,16,3,1,'#9dbbe0');g.r(14,17,2,1,'#b5cbe8');g.r(24,17,2,1,'#b5cbe8');}
   else if(mood==='hot'){g.r(14,14,3,1,INK);g.r(23,14,3,1,INK);P(14,12,HR[1]);P(25,12,HR[1]);g.r(19,18,2,2,mc);g.r(12,16,4,1,'#e8745f');g.r(24,16,4,1,'#e8745f');[[12,11],[12,12],[27,10],[27,11],[26,12]].forEach(([x,y])=>P(x,y,'#9fd3f5'));}
-  if(has('sunglasses')){g.r(13,13,4,2,'#15131d');g.r(23,13,4,2,'#15131d');g.r(17,13,6,1,'#15131d');P(14,13,'#5b5780');P(24,13,'#5b5780');P(12,13,'#15131d');P(27,13,'#15131d');}
+  if(has('sunglasses')){const it=IT('sunglasses'),SG=pal('sunglasses'),f=it?it.fx[0]:'';
+    if(f==='heart'){[15,24].forEach(c=>{P(c-1,12,SG[0]);P(c+1,12,SG[0]);g.r(c-2,13,5,1,SG[0]);g.r(c-1,14,3,1,SG[0]);P(c,15,SG[0]);P(c-1,13,SG[2]);});g.r(18,13,4,1,'#15131d');}
+    else if(f==='star'){[15,24].forEach(c=>{P(c,11,SG[0]);g.r(c-2,12,5,1,SG[0]);g.r(c-1,13,3,1,SG[0]);P(c-1,14,SG[0]);P(c+1,14,SG[0]);});g.r(18,13,4,1,'#15131d');}
+    else if(f==='round'){[15,24].forEach(c=>{g.r(c-1,12,3,1,SG[0]);g.r(c-2,13,5,2,SG[0]);g.r(c-1,15,3,1,SG[0]);P(c-1,13,SG[2]);});g.r(18,13,4,1,SG[1]);P(12,13,SG[1]);P(27,13,SG[1]);}
+    else if(f==='sport'){const A2=ACC('sunglasses')||SG;g.r(12,12,16,3,SG[0]);g.r(12,12,16,1,A2[0]);P(14,13,SG[2]);P(24,13,SG[2]);}
+    else{g.r(13,13,4,2,SG[0]);g.r(23,13,4,2,SG[0]);g.r(17,13,6,1,SG[0]);P(14,13,SG[2]);P(24,13,SG[2]);P(12,13,SG[0]);P(27,13,SG[0]);}}
   if(o.outer==='rain')part(N(E(20,12,9,9.5),E(20,14.5,6.6,6.8)),O);
-  if(has('beanie')){const BN=pal('beanie'),bm=E(20,10,8.8,7);part(N(bm,(x,y)=>y>9),BN);for(let x=10;x<=30;x++){if(bm(x,8))P(x,8,x%2?BN[1]:BN[0]);if(bm(x,9))P(x,9,x%2?BN[1]:BN[0]);}}
-  if(has('scarf')){const SC=pal('scarf');part(Rc(13,19,26,23),SC);part(Tz(23,31,21,24,21,25),SC);g.r(21,26,4,1,SC[1]);g.r(21,29,4,1,SC[1]);}
-  if(has('umbrella')&&!sit&&!kite){const UM=pal('umb');for(let y=0;y<=5;y++){const tt=(6-y)/6.2;const hw=14*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-28.5)>hw)continue;if(y===5&&(x-15)%5===0)continue;P(x,y,y>=4?UM[1]:(x<22?UM[2]:UM[0]));}}}
+  if(has('beanie')){const BN=pal('beanie'),it=IT('beanie'),A2=ACC('beanie')||['#f4f2ee','#d8d4cc','#ffffff'],short=hasFx(it,'short'),bm=E(20,10,8.8,7),cap=N(bm,(x,y)=>y>9||(short&&y<5));
+    if(hasFx(it,'ears')){part(E(13.5,4.5,2.2,2.2),BN);part(E(26.5,4.5,2.2,2.2),BN);P(13,4,A2[0]);P(26,4,A2[0]);}
+    if(hasFx(it,'frogeyes')){part(E(15,3.5,2.3,2.3),BN);part(E(25,3.5,2.3,2.3),BN);}
+    part(cap,BN);for(let x=10;x<=30;x++){if(bm(x,8))P(x,8,x%2?BN[1]:BN[0]);if(bm(x,9))P(x,9,x%2?BN[1]:BN[0]);}
+    if(it)applyFx(P,it,RR({all:N(cap,(x,y)=>y>=8),x0:10,x1:30,y0:2,y1:9,hem:7}),BN,ACC('beanie'));
+    if(hasFx(it,'pom'))part(E(20,2.2,2.4,2.2),A2);
+    if(hasFx(it,'frogeyes')){P(15,3,'#ffffff');P(25,3,'#ffffff');P(15,4,'#1c1a28');P(25,4,'#1c1a28');}}
+  if(has('scarf')){const SC=pal('scarf'),sm=U(Rc(13,19,26,23),Tz(23,31,21,24,21,25));part(sm,SC);g.r(21,26,4,1,SC[1]);g.r(21,29,4,1,SC[1]);
+    if(IT('scarf'))applyFx(P,IT('scarf'),RR({all:sm,x0:13,x1:26,y0:19,y1:31,hem:31}),SC,ACC('scarf'));}
+  if(has('umbrella')&&!sit&&!kite){const UM=hasFx(IT('umbrella'),'clear')?['#e4f2fa','#b9d6ea','#f6fbfe']:IT('umbrella')?pal('umbrella'):pal('umb'),UIT=IT('umbrella'),UA=ACC('umbrella')||['#ffffff','#e8e2d6','#ffffff'];for(let y=0;y<=5;y++){const tt=(6-y)/6.2;const hw=14*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-28.5)>hw)continue;if(y===5&&(x-15)%5===0)continue;const base=y>=4?UM[1]:(x<22?UM[2]:UM[0]);P(x,y,hasFx(UIT,'dots')&&y<4&&(x+y*2)%5===0?UA[0]:hasFx(UIT,'stripes')&&y<4&&Math.floor((x-14)/4)%2?UA[0]:base);}}if(hasFx(UIT,'frogeyes')){[[24,1],[33,1]].forEach(([x,y])=>{g.r(x-1,y-1,3,2,'#ffffff');P(x,y,'#1c1a28');});}}
   g.outline('#1c1a28');return g.url();});}
 function itemSprite(kind,av){const A=av?avOf(av):AV;return pix('it2'+kind+avKey(A),()=>{const W=28,H=24,g=new Grid(W,H);
   const E=(cx,cy,rx,ry)=>(x,y)=>((x+0.5-cx)/rx)**2+((y+0.5-cy)/ry)**2<=1,Rc=(x0,y0,x1,y1)=>(x,y)=>x>=x0&&x<=x1&&y>=y0&&y<=y1;
@@ -202,7 +238,44 @@ function itemSprite(kind,av){const A=av?avOf(av):AV;return pix('it2'+kind+avKey(
   if(kind==='sunglasses'){g.r(4,10,8,5,'#15131d');g.r(16,10,8,5,'#15131d');g.r(12,11,4,1,'#15131d');g.r(1,10,3,1,'#15131d');g.r(24,10,3,1,'#15131d');P(5,11,'#5b5780');P(17,11,'#5b5780');}
   if(kind==='beanie'){const BN=palOf(A,'beanie'),bm=E(13.5,17,10,12);part(N(bm,(x,y)=>y>17),BN);for(let x=3;x<=24;x++)for(let y=16;y<=18;y++)if(E(13.5,17,10.5,12)(x,y-2)||y<=17)if(x>=4&&x<=23)P(x,y,x%2?BN[1]:BN[0]);part(E(13.5,4.5,2.6,2.4),palOf(A,'shoe'));}
   if(kind==='scarf'){const SC=palOf(A,'scarf');part(Tz(6,11,3,24,4,23),SC);part(Tz(11,21,15,19,15,20),SC);g.r(15,14,5,1,SC[1]);g.r(15,18,5,1,SC[1]);[15,17,19].forEach(x=>P(x,22,SC[1]));}
-  if(kind==='umbrella'){for(let y=2;y<=9;y++){const tt=(10-y)/8.2,hw=12*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-14)>hw)continue;if(y===9&&(x-2)%5===0)continue;P(x,y,y>=8?C3.umb[1]:(x<10?C3.umb[2]:C3.umb[0]));}}g.r(14,9,1,11,'#1c1a28');P(14,20,'#1c1a28');P(13,21,'#1c1a28');P(12,21,'#1c1a28');P(11,20,'#1c1a28');P(14,1,'#1c1a28');}
+  if(kind==='umbrella'){const it=itemOf(A,kind),UM=hasFx(it,'clear')?['#e4f2fa','#b9d6ea','#f6fbfe']:it?palOf(A,kind):C3.umb,UA=accOf(A,kind)||['#ffffff','#e8e2d6','#ffffff'];for(let y=2;y<=9;y++){const tt=(10-y)/8.2,hw=12*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-14)>hw)continue;if(y===9&&(x-2)%5===0)continue;const b=y>=8?UM[1]:(x<10?UM[2]:UM[0]);P(x,y,hasFx(it,'dots')&&y<8&&(x+y*2)%5===0?UA[0]:hasFx(it,'stripes')&&y<8&&Math.floor((x-2)/4)%2?UA[0]:b);}}g.r(14,9,1,11,'#1c1a28');P(14,20,'#1c1a28');P(13,21,'#1c1a28');P(12,21,'#1c1a28');P(11,20,'#1c1a28');P(14,1,'#1c1a28');
+    if(hasFx(it,'frogeyes'))[[9,3],[18,3]].forEach(([x,y])=>{g.r(x-1,y-1,3,2,'#ffffff');P(x,y,'#1c1a28');});}
+  // closet pieces: special shapes, then their details (patterns, trims, motifs)
+  {const it=itemOf(A,kind);if(it){const ac=accOf(A,kind),R=o=>({x0:0,x1:27,y0:0,y1:23,neck:[],collar:[],turtle:[],lapels:[],fur:[],pockets:[],armX:[-9,-9],sideX:[-9,-9],cuffY:999,waist:-9,cx:13,chest:[13,11],hem:21,...o}),ink='#1c1a28';
+    if(kind==='tee'||kind==='tank'||kind==='long'||kind==='sweater'){const bd=N(kind==='tank'?Tz(3,21,9,18,8,19):torso,neck),arms=kind==='tee'?shortS:kind==='tank'?null:longS;
+      if(hasFx(it,'turtleneck'))part(Rc(10,0,17,3),C);
+      applyFx(P,it,R({all:arms?U(bd,arms):bd,body:bd,arms,y0:3,neck:[[10,3],[11,4],[12,5],[15,5],[16,4],[17,3]],collar:[[10,2],[11,3],[12,4],[15,4],[16,3],[17,2]],turtle:[[10,1],[17,1],[10,3],[17,3]],cuffY:kind==='tee'?8:17,armX:kind==='tee'?[2,25]:[1,26],sideX:[9,18],waist:14}),C,ac);}
+    if(kind==='light'||kind==='hoodie'||kind==='coat'||kind==='rain'){const long=kind==='coat'||kind==='rain',bd=N(long?Tz(4,23,8,19,7,20):torso,neck),front=kind==='light'?Rc(13,6,14,21):null,open=kind==='light'&&!hasFx(it,'closed');
+      applyFx(P,it,R({all:U(open?N(bd,front):bd,longS),body:open?N(bd,front):bd,arms:longS,front,y0:3,hem:long?23:21,chest:[open?10:13,11],lapels:[[11,5],[12,6],[16,5],[15,6]],collar:[[10,3],[11,3],[16,3],[17,3]],fur:[[9,2],[10,2],[11,2],[12,2],[15,2],[16,2],[17,2],[18,2],[9,3],[18,3]],cuffY:17,armX:[1,26],sideX:[9,18],waist:14,pockets:[[9,16],[10,16],[17,16],[18,16]]}),C,ac);}
+    if(kind==='shorts'||kind==='pants'){const sk=hasFx(it,'skirt'),wide=hasFx(it,'wide');let m;
+      if(sk||wide)g.p.fill(null);
+      if(sk&&kind==='shorts'){m=Tz(5,17,9,18,5,22);part(m,C);}
+      else if(sk){m=Tz(2,13,9,18,5,22);part(m,C);part(Rc(9,14,12,22),TIGHTS);part(Rc(15,14,18,22),TIGHTS);}
+      else if(wide){m=N(Tz(2,22,8,19,4,23),Tz(8,22,13,14,12,15));part(m,C);}
+      else m=kind==='shorts'?N(Tz(6,15,7,20,6,21),Tz(11,15,13,14,13,14)):N(Tz(2,22,8,19,6,21),Tz(8,22,13,14,13,14));
+      applyFx(P,it,R({all:m,legs:[[10,17]],thighY:kind==='pants'?8:9,kneeY:13,y0:sk||kind==='pants'?2:6,hem:sk?(kind==='shorts'?17:13):kind==='shorts'?15:22,sideX:kind==='shorts'?[7,20]:[8,19],pockets:kind==='shorts'?[[8,8],[9,8],[18,8],[19,8]]:[[9,5],[10,5],[17,5],[18,5]]}),C,ac);}
+    if(kind==='shoe'){const A2=ac||['#f4f2ee','#d8d4cc','#ffffff'],sm=U(E(8,15,5.5,3),Rc(4,12,9,15),E(20,15,5.5,3),Rc(16,12,21,15));
+      if(hasFx(it,'boot')||hasFx(it,'hightop')){const top=hasFx(it,'boot')?6:8;part(U(Rc(4,top,9,13),Rc(16,top,21,13)),C);if(hasFx(it,'hightop')){g.r(4,10,6,1,A2[0]);g.r(16,10,6,1,A2[0]);}}
+      if(hasFx(it,'check'))for(let y=6;y<=17;y++)for(let x=2;x<=26;x++)if(sm(x,y)&&(x+y)%2)P(x,y,A2[0]);
+      if(hasFx(it,'swoosh'))[[5,15],[6,15],[7,14],[17,15],[18,15],[19,14]].forEach(([x,y])=>P(x,y,A2[0]));
+      if(hasFx(it,'strap')){g.r(4,13,6,1,ink);g.r(16,13,6,1,ink);}
+      if(hasFx(it,'flat')&&!hasFx(it,'strap')){P(6,13,'#d9b45a');P(18,13,'#d9b45a');}
+      if(hasFx(it,'chunky')){g.r(3,18,11,1,'#b9b5ab');g.r(15,18,11,1,'#b9b5ab');}}
+    if(kind==='beanie'){const short=hasFx(it,'short'),bm=E(13.5,17,10,12),cap=N(bm,(x,y)=>y>17||(short&&y<9)),A2=ac||['#f4f2ee','#d8d4cc','#ffffff'];g.p.fill(null);
+      if(hasFx(it,'ears')){part(E(6,8,2.6,2.6),C);part(E(21,8,2.6,2.6),C);P(6,8,A2[0]);P(21,8,A2[0]);}
+      if(hasFx(it,'frogeyes')){part(E(8,7,3,3),C);part(E(19,7,3,3),C);}
+      part(cap,C);for(let x=3;x<=24;x++)for(let y=16;y<=18;y++)if(x>=4&&x<=23)P(x,y,x%2?C[1]:C[0]);
+      applyFx(P,it,R({all:N(cap,(x,y)=>y>=16),y0:5,hem:15}),C,ac);
+      if(hasFx(it,'pom'))part(E(13.5,4.5,2.6,2.4),A2);
+      if(hasFx(it,'frogeyes')){[8,19].forEach(x=>{g.r(x-1,6,2,2,'#ffffff');P(x,7,ink);});}}
+    if(kind==='scarf')applyFx(P,it,R({all:U(Tz(6,11,3,24,4,23),Tz(11,21,15,19,15,20)),y0:6,hem:21}),C,ac);
+    if(kind==='sunglasses'){const f=it.fx[0];g.p.fill(null);
+      if(f==='heart')[7,20].forEach(c=>{g.r(c-3,9,2,1,C[0]);g.r(c+1,9,2,1,C[0]);g.r(c-3,10,6,2,C[0]);g.r(c-2,12,4,1,C[0]);g.r(c-1,13,2,1,C[0]);P(c-2,10,C[2]);});
+      else if(f==='star')[7,20].forEach(c=>{g.r(c-1,8,2,1,C[0]);g.r(c-4,10,8,1,C[0]);g.r(c-2,11,4,2,C[0]);g.r(c-3,13,2,1,C[0]);g.r(c+1,13,2,1,C[0]);});
+      else if(f==='round')[7,20].forEach(c=>{part(E(c,11.5,3.4,3),C);P(c-1,10,C[2]);});
+      else if(f==='sport'){const A2=ac||C;g.r(2,9,24,5,C[0]);g.r(2,9,24,1,A2[0]);P(6,11,C[2]);P(19,11,C[2]);}
+      else{g.r(4,10,8,5,C[0]);g.r(16,10,8,5,C[0]);P(5,11,C[2]);P(17,11,C[2]);}
+      g.r(12,11,4,1,ink);g.r(1,10,2,1,ink);g.r(25,10,2,1,ink);}}}
   g.outline('#1c1a28');return g.url();});}
 function wearOf(o){const cap=w=>w[0].toUpperCase()+w.slice(1);const parts=[cap(nameOf(o.top||'tee'))];if(o.outer&&o.outer!=='none')parts.push(nameOf(o.outer));else if(o.bottom==='shorts')parts.push(nameOf('shorts'));const an=(o.acc||[]).map((a,i)=>i===0?a[0].toUpperCase()+a.slice(1):a);return {o:{top:o.top||'tee',outer:o.outer||'none',bottom:o.bottom||'pants',acc:o.acc||[]},wear:parts.join(' + ')+'.'+(an.length?' '+an.join(', ')+'.':'')};}
 function outfitFor(t,c,w){
@@ -1024,7 +1097,7 @@ class Component extends DCLogic {
     const savedOk=st.saved&&st.felt!=null;
     const fitHints={'too cold':'got it. warmer layer next time.','just right':'nice. same fit next time.','too warm':'got it. lighter next time.'};
     const dressList=(()=>{const o=fit.o,L=[];const A=(k,name,role)=>L.push({src:itemSprite(k),name,role,k});
-      A(o.top,nameOf(o.top),'torso');{const bk=skirtKind(o)==='tights'?'tights':o.bottom;A(bk,nameOf(bk),'legs');}A('shoe',nameOf('shoe'),'feet');if(o.outer!=='none')A(o.outer,nameOf(o.outer),'over the top');if(o.acc.includes('scarf'))A('scarf','scarf','neck');if(o.acc.includes('beanie'))A('beanie','beanie','head');if(o.acc.includes('sunglasses'))A('sunglasses','sunglasses','eyes');if(o.acc.includes('umbrella'))A('umbrella','umbrella','hand');return L;})();
+      A(o.top,nameOf(o.top),'torso');{const bk=!itemOf(AV,o.bottom)&&skirtKind(o)==='tights'?'tights':o.bottom;A(bk,nameOf(bk),'legs');}A('shoe',nameOf('shoe'),'feet');if(o.outer!=='none')A(o.outer,nameOf(o.outer),'over the top');if(o.acc.includes('scarf'))A('scarf','scarf','neck');if(o.acc.includes('beanie'))A('beanie','beanie','head');if(o.acc.includes('sunglasses'))A('sunglasses','sunglasses','eyes');if(o.acc.includes('umbrella'))A('umbrella','umbrella','hand');return L;})();
     this._dressN=dressList.length;
     const shown=new Set(dressList.slice(0,Math.min(st.dressStep,dressList.length)).map(p=>p.k));
     const partial={top:fit.o.top,bottom:fit.o.bottom,outer:shown.has(fit.o.outer)?fit.o.outer:'none',acc:fit.o.acc.filter(a=>shown.has(a))};
@@ -1126,4 +1199,4 @@ class Component extends DCLogic {
   }
 }
 
-export { Component, PRESETS, PORDER, INTDEF, outfitFor, wearOf, drawScene, sprite, itemSprite, setAvatar, nameOf, SKINS, HAIRC, HAIRS, STYLES, AV_DEFAULT, COLORS, KINDS, palOf };
+export { Component, PRESETS, PORDER, INTDEF, outfitFor, wearOf, drawScene, sprite, itemSprite, setAvatar, nameOf, SKINS, HAIRC, HAIRS, STYLES, AV_DEFAULT, COLORS, KINDS, palOf, ITEMS, ITEM, TAGS, KITS, kitWardrobe };

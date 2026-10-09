@@ -1,5 +1,5 @@
-"""Descriptor library, same table as frontend/lib/descriptors.ts. Every word says how it *feels* out there (crisp,
-sticky, dappled, leaden, unlivable...), not the obvious sky report you can see out the window.
+"""Descriptor library, same table as frontend/lib/descriptors.ts. Every word says how the day *feels* (crisp, sticky,
+dappled, leaden, unlivable...), never a weather word (no breezy, cloudy, hazy, snowy...).
 
 Jev decides which factor stands out; the word comes from that factor's cell for the score's band.
 Words in a cell are interchangeable, so one is picked per date and the label stays the same all day.
@@ -9,22 +9,22 @@ BANDS = [('perfect', 88), ('great', 75), ('good', 60), ('meh', 45), ('rough', 30
 
 # factor -> band -> words
 DESCRIPTORS: dict[str, dict[str, list[str]]] = {
-    'none': {'perfect': ['serene', 'idyllic'], 'great': ['easy', 'gentle'], 'good': ['mellow', 'calm'], 'meh': ['middling'], 'rough': ['iffy'], 'bad': ['grim'], 'awful': ['brutal']},
-    'cold': {'perfect': ['crisp'], 'great': ['crisp', 'fresh'], 'good': ['brisk', 'nippy'], 'meh': ['raw', 'nippy'], 'rough': ['biting', 'bitter'], 'bad': ['frigid', 'numbing'], 'awful': ['brutal', 'arctic']},
-    'heat': {'perfect': ['toasty'], 'great': ['toasty', 'summery'], 'good': ['sun-baked'], 'meh': ['baking'], 'rough': ['scorching', 'sweltering'], 'bad': ['blistering'], 'awful': ['unlivable', 'oven-like']},
-    'humid': {'perfect': ['balmy'], 'great': ['balmy', 'tropical'], 'good': ['tropical'], 'meh': ['sticky', 'clammy'], 'rough': ['swampy', 'sticky'], 'bad': ['stifling', 'soupy'], 'awful': ['unlivable', 'suffocating']},
-    'wind': {'perfect': ['breezy'], 'great': ['breezy', 'airy'], 'good': ['blustery'], 'meh': ['blustery', 'gusty'], 'rough': ['whipping', 'blustery'], 'bad': ['howling', 'whiplash'], 'awful': ['gale-force']},
-    'wet': {'perfect': ['dewy'], 'great': ['dewy', 'spritzy'], 'good': ['spitting', 'drippy'], 'meh': ['damp', 'soggy'], 'rough': ['soggy', 'pelting'], 'bad': ['pelting', 'drenching'], 'awful': ['torrential', 'biblical']},
-    'storm': {'perfect': ['electric'], 'great': ['electric'], 'good': ['rumbly'], 'meh': ['rumbly', 'brooding'], 'rough': ['wild'], 'bad': ['ferocious'], 'awful': ['apocalyptic']},
-    'snow': {'perfect': ['magical'], 'great': ['powdery', 'magical'], 'good': ['powdery', 'frosty'], 'meh': ['frosty', 'wintry'], 'rough': ['slushy', 'raw'], 'bad': ['whiteout'], 'awful': ['blinding', 'brutal']},
-    'ice': {'perfect': ['glassy'], 'great': ['glassy'], 'good': ['glazed'], 'meh': ['slick', 'glazed'], 'rough': ['treacherous', 'slick'], 'bad': ['treacherous'], 'awful': ['perilous']},
-    'fog': {'perfect': ['dreamy', 'hushed'], 'great': ['hushed', 'dreamy'], 'good': ['muffled'], 'meh': ['murky'], 'rough': ['murky', 'soupy'], 'bad': ['blinding'], 'awful': ['blinding']},
-    'smoke': {'perfect': ['hazy'], 'great': ['hazy'], 'good': ['filmy'], 'meh': ['smoggy'], 'rough': ['acrid'], 'bad': ['choking'], 'awful': ['toxic']},
-    'partly': {'perfect': ['dappled'], 'great': ['dappled', 'sun-kissed'], 'good': ['dappled', 'patchy'], 'meh': ['fickle'], 'rough': ['fickle'], 'bad': ['moody'], 'awful': ['moody']},
-    'mostly': {'perfect': ['soft', 'muted'], 'great': ['soft', 'muted'], 'good': ['muted', 'mellow'], 'meh': ['dim', 'muted'], 'rough': ['dull'], 'bad': ['gloomy'], 'awful': ['gloomy']},
-    'gloom': {'perfect': ['hushed'], 'great': ['soft', 'hushed'], 'good': ['muted', 'pewter'], 'meh': ['drab', 'leaden'], 'rough': ['leaden', 'dreary'], 'bad': ['dreary', 'bleak'], 'awful': ['bleak']},
-    'dusk': {'perfect': ['golden'], 'great': ['golden', 'glowy'], 'good': ['glowy']},
-    'night': {'perfect': ['starlit', 'velvety'], 'great': ['starlit', 'still'], 'good': ['still']},
+    'none': {'perfect': ['serene','idyllic'], 'great': ['easy','gentle'], 'good': ['mellow','calm'], 'meh': ['middling','so-so'], 'rough': ['iffy'], 'bad': ['grim'], 'awful': ['brutal']},
+    'cold': {'perfect': ['crisp'], 'great': ['crisp','fresh'], 'good': ['brisk','nippy'], 'meh': ['raw','nippy'], 'rough': ['biting','bitter'], 'bad': ['numbing','frigid'], 'awful': ['brutal','merciless']},
+    'heat': {'perfect': ['toasty'], 'great': ['toasty','lazy'], 'good': ['languid'], 'meh': ['sluggish'], 'rough': ['scorching','sweltering'], 'bad': ['blistering'], 'awful': ['unlivable','oven-like']},
+    'humid': {'perfect': ['velvety'], 'great': ['lush','velvety'], 'good': ['heavy'], 'meh': ['sticky','clammy'], 'rough': ['swampy','sticky'], 'bad': ['stifling','soupy'], 'awful': ['unlivable','suffocating']},
+    'wind': {'perfect': ['lively'], 'great': ['lively','spirited'], 'good': ['restless'], 'meh': ['restless','unruly'], 'rough': ['unruly','whiplash'], 'bad': ['savage'], 'awful': ['merciless']},
+    'wet': {'perfect': ['dewy'], 'great': ['dewy','glistening'], 'good': ['drippy'], 'meh': ['soggy','sodden'], 'rough': ['sodden','dismal'], 'bad': ['miserable'], 'awful': ['biblical']},
+    'storm': {'perfect': ['electric'], 'great': ['electric'], 'good': ['brooding'], 'meh': ['brooding','tense'], 'rough': ['wild'], 'bad': ['ferocious'], 'awful': ['apocalyptic']},
+    'snow': {'perfect': ['magical'], 'great': ['storybook','magical'], 'good': ['storybook'], 'meh': ['muffled'], 'rough': ['raw'], 'bad': ['savage'], 'awful': ['blinding']},
+    'ice': {'perfect': ['glassy'], 'great': ['glassy'], 'good': ['glittering'], 'meh': ['slick'], 'rough': ['treacherous'], 'bad': ['treacherous'], 'awful': ['perilous']},
+    'fog': {'perfect': ['dreamy'], 'great': ['dreamy','hushed'], 'good': ['muffled'], 'meh': ['murky'], 'rough': ['murky','eerie'], 'bad': ['eerie'], 'awful': ['blinding']},
+    'smoke': {'perfect': ['dusky'], 'great': ['dusky'], 'good': ['filmy'], 'meh': ['gritty'], 'rough': ['acrid'], 'bad': ['choking'], 'awful': ['toxic']},
+    'partly': {'perfect': ['dappled'], 'great': ['dappled','playful'], 'good': ['playful','fickle'], 'meh': ['fickle'], 'rough': ['fickle'], 'bad': ['moody'], 'awful': ['moody']},
+    'mostly': {'perfect': ['soft'], 'great': ['soft','muted'], 'good': ['muted','mellow'], 'meh': ['dim','muted'], 'rough': ['dull'], 'bad': ['gloomy'], 'awful': ['gloomy']},
+    'gloom': {'perfect': ['hushed'], 'great': ['soft','hushed'], 'good': ['muted','pewter'], 'meh': ['drab','leaden'], 'rough': ['leaden','dreary'], 'bad': ['dreary','bleak'], 'awful': ['bleak']},
+    'dusk': {'perfect': ['golden'], 'great': ['golden','glowy'], 'good': ['glowy']},
+    'night': {'perfect': ['velvety','twinkly'], 'great': ['twinkly','still'], 'good': ['still']},
 }
 
 
