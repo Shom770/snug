@@ -15,23 +15,23 @@ export const BANDS: { id: Band; min: number }[] = [
 
 // factor -> band -> words
 export const DESCRIPTORS: Record<Factor, Partial<Record<Band, string[]>>> = {
-  none: { perfect: ['sunny', 'clear'], great: ['sunny', 'clear'], good: ['mild', 'clear'], meh: ['mild'], rough: ['mild'], bad: ['mild'], awful: ['mild'] },
-  cold: { perfect: ['crisp'], great: ['crisp', 'cool'], good: ['cool'], meh: ['chilly', 'cool'], rough: ['cold', 'chilly'], bad: ['bitter', 'freezing'], awful: ['frigid', 'freezing'] },
-  heat: { perfect: ['warm', 'sunny'], great: ['warm', 'sunny'], good: ['warm'], meh: ['hot'], rough: ['hot'], bad: ['scorching', 'sweltering'], awful: ['scorching'] },
-  humid: { perfect: ['balmy'], great: ['balmy'], good: ['humid'], meh: ['humid', 'muggy'], rough: ['muggy', 'sticky'], bad: ['steamy', 'sticky'], awful: ['steamy'] },
-  wind: { perfect: ['breezy'], great: ['breezy'], good: ['breezy', 'windy'], meh: ['windy', 'gusty'], rough: ['gusty', 'windy'], bad: ['howling'], awful: ['gale-force'] },
-  wet: { perfect: ['showery'], great: ['drizzly'], good: ['drizzly'], meh: ['damp', 'rainy'], rough: ['rainy'], bad: ['pouring'], awful: ['torrential'] },
-  storm: { perfect: ['thundery'], great: ['thundery'], good: ['stormy', 'thundery'], meh: ['stormy'], rough: ['stormy'], bad: ['stormy'], awful: ['severe storms'] },
-  snow: { perfect: ['snowy'], great: ['snowy'], good: ['snowy'], meh: ['snowy'], rough: ['slushy', 'snowy'], bad: ['whiteout'], awful: ['blizzard'] },
-  ice: { perfect: ['icy'], great: ['icy'], good: ['icy'], meh: ['icy', 'sleety'], rough: ['sleety'], bad: ['freezing rain'], awful: ['freezing rain'] },
-  fog: { perfect: ['misty'], great: ['misty'], good: ['misty', 'foggy'], meh: ['foggy'], rough: ['foggy'], bad: ['dense fog'], awful: ['dense fog'] },
-  smoke: { perfect: ['hazy'], great: ['hazy'], good: ['hazy'], meh: ['hazy', 'smoky'], rough: ['smoky'], bad: ['smoky'], awful: ['smoky'] },
-  // broken cloud, the sun in and out (see describeDay: about 25-62% and 62-88% of the sky)
-  partly: { perfect: ['partly sunny'], great: ['partly sunny'], good: ['partly sunny'], meh: ['partly sunny'], rough: ['partly sunny'], bad: ['partly sunny'], awful: ['partly sunny'] },
-  mostly: { perfect: ['mostly cloudy'], great: ['mostly cloudy'], good: ['mostly cloudy'], meh: ['mostly cloudy'], rough: ['mostly cloudy'], bad: ['mostly cloudy'], awful: ['mostly cloudy'] },
-  gloom: { perfect: ['cloudy'], great: ['cloudy'], good: ['cloudy', 'overcast'], meh: ['overcast', 'grey'], rough: ['overcast', 'grey'], bad: ['dreary'], awful: ['dreary'] },
-  dusk: { perfect: ['golden'], great: ['golden'], good: ['clear'] },
-  night: { perfect: ['starry', 'clear'], great: ['clear', 'starry'], good: ['clear'] },
+  // same table as backend/src/app/descriptors.py: how it feels out there, not the obvious sky report
+  none: { perfect: ['serene', 'idyllic'], great: ['easy', 'gentle'], good: ['mellow', 'calm'], meh: ['middling'], rough: ['iffy'], bad: ['grim'], awful: ['brutal'] },
+  cold: { perfect: ['crisp'], great: ['crisp', 'fresh'], good: ['brisk', 'nippy'], meh: ['raw', 'nippy'], rough: ['biting', 'bitter'], bad: ['frigid', 'numbing'], awful: ['brutal', 'arctic'] },
+  heat: { perfect: ['toasty'], great: ['toasty', 'summery'], good: ['sun-baked'], meh: ['baking'], rough: ['scorching', 'sweltering'], bad: ['blistering'], awful: ['unlivable', 'oven-like'] },
+  humid: { perfect: ['balmy'], great: ['balmy', 'tropical'], good: ['tropical'], meh: ['sticky', 'clammy'], rough: ['swampy', 'sticky'], bad: ['stifling', 'soupy'], awful: ['unlivable', 'suffocating'] },
+  wind: { perfect: ['breezy'], great: ['breezy', 'airy'], good: ['blustery'], meh: ['blustery', 'gusty'], rough: ['whipping', 'blustery'], bad: ['howling', 'whiplash'], awful: ['gale-force'] },
+  wet: { perfect: ['dewy'], great: ['dewy', 'spritzy'], good: ['spitting', 'drippy'], meh: ['damp', 'soggy'], rough: ['soggy', 'pelting'], bad: ['pelting', 'drenching'], awful: ['torrential', 'biblical'] },
+  storm: { perfect: ['electric'], great: ['electric'], good: ['rumbly'], meh: ['rumbly', 'brooding'], rough: ['wild'], bad: ['ferocious'], awful: ['apocalyptic'] },
+  snow: { perfect: ['magical'], great: ['powdery', 'magical'], good: ['powdery', 'frosty'], meh: ['frosty', 'wintry'], rough: ['slushy', 'raw'], bad: ['whiteout'], awful: ['blinding', 'brutal'] },
+  ice: { perfect: ['glassy'], great: ['glassy'], good: ['glazed'], meh: ['slick', 'glazed'], rough: ['treacherous', 'slick'], bad: ['treacherous'], awful: ['perilous'] },
+  fog: { perfect: ['dreamy', 'hushed'], great: ['hushed', 'dreamy'], good: ['muffled'], meh: ['murky'], rough: ['murky', 'soupy'], bad: ['blinding'], awful: ['blinding'] },
+  smoke: { perfect: ['hazy'], great: ['hazy'], good: ['filmy'], meh: ['smoggy'], rough: ['acrid'], bad: ['choking'], awful: ['toxic'] },
+  partly: { perfect: ['dappled'], great: ['dappled', 'sun-kissed'], good: ['dappled', 'patchy'], meh: ['fickle'], rough: ['fickle'], bad: ['moody'], awful: ['moody'] },
+  mostly: { perfect: ['soft', 'muted'], great: ['soft', 'muted'], good: ['muted', 'mellow'], meh: ['dim', 'muted'], rough: ['dull'], bad: ['gloomy'], awful: ['gloomy'] },
+  gloom: { perfect: ['hushed'], great: ['soft', 'hushed'], good: ['muted', 'pewter'], meh: ['drab', 'leaden'], rough: ['leaden', 'dreary'], bad: ['dreary', 'bleak'], awful: ['bleak'] },
+  dusk: { perfect: ['golden'], great: ['golden', 'glowy'], good: ['glowy'] },
+  night: { perfect: ['starlit', 'velvety'], great: ['starlit', 'still'], good: ['still'] },
 };
 
 // short, direct, lowercase lines. {tokens} are filled by describeDay().
@@ -92,7 +92,7 @@ export function describeDay(w: NormalizedWeather, score: number, extra: { best?:
   // grey only for a (nearly) complete deck, sun and clouds in between; evening/night words only under an open sky
   const cover = w.cloudLow != null && w.cloudMid != null ? 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) : w.clouds;
   if (factor === 'none' || factor === 'gloom') factor = cover >= 88 ? 'gloom' : cover >= 62 ? 'mostly' : cover >= 25 ? 'partly' : 'none';
-  if (factor === 'partly' && w.night) return { label: 'partly cloudy', band, factor, blurb: 'clouds and stars.', options: ['partly cloudy'] };
+  if (factor === 'partly' && w.night) return { label: 'moody', band, factor, blurb: 'clouds and stars.', options: ['moody'] };
   if (factor === 'none' && w.night && DESCRIPTORS.night[band]) factor = 'night';
   else if (factor === 'none' && w.golden && hour >= 12 && DESCRIPTORS.dusk[band]) factor = 'dusk'; // the evening glow
   const cell = DESCRIPTORS[factor][band] || DESCRIPTORS.none[band] || ['okay'];
