@@ -1,9 +1,9 @@
 """The signed-in person: who they are, their preferences, and their evening check-ins."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from .auth import UserOut, current_user, require_user
 from .db import Database, Row, get_db, placeholders, utcnow
 
@@ -25,14 +25,21 @@ class Tuning(BaseModel):
     cloudAvoid: float  # % less cloud in the days they picked
 
 
+class Piece(BaseModel):
+    """One piece snug owns: which style's version of it, in an optional colour (names from the frontend's catalog)."""
+    s: str = Field(max_length=16)
+    c: str | None = Field(None, max_length=16)
+
+
 class Avatar(BaseModel):
     """How snug looks. Validated loosely; the frontend falls back to defaults for anything it doesn't know."""
     skin: str = Field('light', max_length=16)
     body: Literal['boy', 'girl'] = 'boy'
     hair: str = Field('short', max_length=16)
     hairColor: str = Field('darkbrown', max_length=16)
-    style: str = Field('casual', max_length=16)
+    style: str = Field('casual', max_length=16)  # the overall look, for any kind of piece not picked at the shop
     skirt: bool = False
+    wardrobe: dict[Annotated[str, StringConstraints(max_length=16)], Piece] = Field(default_factory=dict, max_length=20)  # kind -> piece
 
 
 class Prefs(BaseModel):

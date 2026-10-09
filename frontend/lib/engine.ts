@@ -50,12 +50,23 @@ const STYLES={
 };
 const AV_DEFAULT={skin:'light',body:'boy',hair:'short',hairColor:'darkbrown',style:'casual',skirt:false};
 let AV={...AV_DEFAULT};
-function avOf(a){const v={...AV_DEFAULT,...(a||{})};if(!SKINS[v.skin])v.skin='light';if(!HAIRC[v.hairColor])v.hairColor='darkbrown';if(!HAIRS.includes(v.hair))v.hair='short';if(!STYLES[v.style])v.style='casual';v.body=v.body==='girl'?'girl':'boy';v.skirt=!!v.skirt;return v;}
+// colours a piece can be bought in at the shop (or keep the piece's own colour)
+const COLORS={white:['#f4f2ee','#d8d4cc','#ffffff'],cream:['#efe6d6','#d6cab5','#faf5ec'],black:['#1f1f22','#141416','#34343a'],grey:['#8c8f98','#6f727a','#a9acb4'],navy:['#2f4166','#223050','#465a85'],denim:['#4a6a9a','#36507a','#6a8ab8'],sky:['#a9c4e6','#8aa8cd','#c6daf2'],green:['#4f6b3c','#3a5230','#678a52'],olive:['#7a7a52','#5f5f3e','#96966c'],tan:['#c29a6b','#a07c52','#d6b58c'],brown:['#6b4a33','#523624','#8a6447'],red:['#c4453a','#9c3329','#dc6a5f'],orange:['#e07a2c','#bd6220','#ee9a55'],yellow:['#e8b93a','#c79a22','#f2cf6a'],pink:['#f2c4cf','#dba5b2','#f9dbe2'],lavender:['#c8b6e2','#ab98c9','#dccdef']};
+// every kind of piece Jev can call for; the wardrobe picks which one of each snug owns
+const KINDS=['tank','tee','long','sweater','light','hoodie','coat','rain','shorts','pants','shoe','beanie','scarf'];
+function avOf(a){const v={...AV_DEFAULT,...(a||{})};if(!SKINS[v.skin])v.skin='light';if(!HAIRC[v.hairColor])v.hairColor='darkbrown';if(!HAIRS.includes(v.hair))v.hair='short';if(!STYLES[v.style])v.style='casual';v.body=v.body==='girl'?'girl':'boy';v.skirt=!!v.skirt;
+  const w={};Object.entries(v.wardrobe||{}).forEach(([k,it])=>{if(KINDS.includes(k)&&it&&STYLES[it.s])w[k]=COLORS[it.c]?{s:it.s,c:it.c}:{s:it.s};});v.wardrobe=w;return v;}
 function setAvatar(a){AV=avOf(a);}
-const avKey=a=>[a.skin,a.body,a.hair,a.hairColor,a.style,a.skirt?1:0].join('.');
-const palOf=(a,k)=>(STYLES[a.style].pal||{})[k]||C3[k];
+const avKey=a=>[a.skin,a.body,a.hair,a.hairColor,a.style,a.skirt?1:0,KINDS.map(k=>{const w=(a.wardrobe||{})[k];return w?w.s+(w.c?':'+w.c:''):'';}).join(',')].join('.');
+// a piece's style (what it is and its details) and colour: the wardrobe's pick, else the overall style
+const styleOf=(a,k)=>{const w=(a.wardrobe||{})[k];return w&&STYLES[w.s]?w.s:a.style;};
+const palOf=(a,k)=>{const w=(a.wardrobe||{})[k];if(w&&COLORS[w.c])return COLORS[w.c];return (STYLES[styleOf(a,k)].pal||{})[k]||C3[k];};
+const detsOf=a=>{const d={};KINDS.forEach(k=>{const v=(STYLES[styleOf(a,k)].det||{})[k];if(v)d[k]=v;});return d;};
 const DEF_NAMES={tank:'tank',tee:'tee',long:'long sleeve',sweater:'sweater',light:'light jacket',hoodie:'hoodie',coat:'coat',rain:'rain jacket',shorts:'shorts',pants:'pants',shoe:'sneakers'};
-function nameOf(k,a){a=a||AV;if(k==='shorts'&&a.skirt)return 'skirt';return (STYLES[a.style].names||{})[k]||DEF_NAMES[k]||k;}
+// with "skirts" on: shorts become a skirt, and pants a skirt with tights unless it's coat weather
+const TIGHTS=['#3a3448','#2a2536','#4f485f'];
+function skirtKind(o,a){a=a||AV;return !a.skirt?null:o.bottom==='shorts'?'shorts':o.bottom==='pants'&&o.outer!=='coat'?'tights':null;}
+function nameOf(k,a){a=a||AV;if(k==='shorts'&&a.skirt)return 'skirt';if(k==='tights')return 'skirt & tights';return (STYLES[styleOf(a,k)].names||{})[k]||DEF_NAMES[k]||k;}
 
 // 46x58 sprite. pose: stand | sit | kite. av: who snug is (skin, hair, style...), defaults to the current avatar
 function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stringify(o)+mood+pose+avKey(A),()=>{
@@ -67,13 +78,13 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   const part=(mask,[b,d,l])=>{for(let y=0;y<H;y++){let x=0;while(x<W){if(!mask(x,y)){x++;continue;}let x2=x;while(x2+1<W&&mask(x2+1,y))x2++;const n=x2-x+1;for(let i=x;i<=x2;i++){let c=b;if(n>=5&&i>=x2-1)c=d;else if(n>=3&&i===x2)c=d;else if(n>=4&&i===x)c=l;g.r(i,y,1,1,c);}x=x2+1;}}};
   const P=(x,y,c)=>g.r(x,y,1,1,c);
   const paint=(mask,y0,y1,c)=>{for(let y=y0;y<=y1;y++)for(let x=0;x<W;x++)if(mask(x,y))P(x,y,c);};
-  const sit=pose==='sit',kite=pose==='kite',SK=SKINS[A.skin],HR=HAIRC[A.hairColor],ST=STYLES[A.style],DET=ST.det||{};
+  const sit=pose==='sit',kite=pose==='kite',SK=SKINS[A.skin],HR=HAIRC[A.hairColor],DET=detsOf(A);
   const pal=k=>palOf(A,k);
   const TOP=pal(o.top),O=pal(o.outer),BOT=pal(o.bottom),SHOE=pal('shoe');
   const armL=Tz(23,35,9,12,10,12),armR=kite?Tz(9,23,28,31,27,30):Tz(23,35,27,30,27,29);
   const handL=E(11,37,1.8,2),handR=kite?E(30,8,1.8,2):E(28.5,37,1.8,2);
   const girl=A.body==='girl',torso=girl?Tz(22,36,12,27,15,24):Tz(22,36,12,27,14,25);
-  const skirt=A.skirt&&o.bottom==='shorts';
+  const skirt=!!skirtKind(o,A),LEG=skirtKind(o,A)==='tights'?TIGHTS:SKINS[A.skin];
   if(has('umbrella')&&!sit&&!kite){g.r(28,6,1,32,'#1c1a28');P(28,38,'#1c1a28');P(27,39,'#1c1a28');P(26,39,'#1c1a28');P(25,38,'#1c1a28');}
   // hair that sits behind the head
   if(A.hair==='afro'){part(E(20,10.5,11.5,10),HR);for(let i=0;i<22;i++){const x=9+((i*7)%23),y=2+((i*5)%13);if(E(20,10.5,11,9.5)(x,y))P(x,y,i%3?HR[1]:HR[2]);}}
@@ -83,7 +94,7 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   // legs and bottoms
   if(sit){part(E(20,41,12,4),BOT);if(o.bottom==='shorts'&&!skirt)part(E(20,42.6,8,1.8),SK);part(E(8.5,43,2.4,1.8),SHOE);part(E(31.5,43,2.4,1.8),SHOE);}
   else{const hips=Tz(36,39,14,25,14,25);
-    if(skirt){part(Tz(36,45,14,25,11,28),BOT);part(Tz(46,51,15,17,15,17),SK);part(Tz(46,51,22,24,22,24),SK);for(let x=12;x<=27;x+=3)P(x,44,BOT[1]);}
+    if(skirt){part(Tz(36,45,14,25,11,28),BOT);part(Tz(46,51,15,17,15,17),LEG);part(Tz(46,51,22,24,22,24),LEG);for(let x=12;x<=27;x+=3)P(x,44,BOT[1]);}
     else if(o.bottom==='shorts'){part(U(hips,Tz(39,44,14,18,14,18),Tz(39,44,21,25,21,25)),BOT);part(Tz(45,51,15,17,15,17),SK);part(Tz(45,51,22,24,22,24),SK);
       if(DET.shorts==='pockets'){g.r(14,40,2,3,BOT[1]);g.r(24,40,2,3,BOT[1]);}if(DET.shorts==='sidestripe'){paint(Rc(14,37,14,44),37,44,'#f4f4f4');paint(Rc(25,37,25,44),37,44,'#f4f4f4');}}
     else{part(U(hips,Tz(39,51,14,18,15,18),Tz(39,51,21,25,21,24)),BOT);
@@ -91,7 +102,7 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
       if(DET.pants==='joggers'){g.r(15,50,4,2,BOT[1]);g.r(21,50,4,2,BOT[1]);}
       if(DET.pants==='ribs')for(let y=39;y<=50;y++)for(const x of [15,17,22,24])P(x,y,BOT[1]);}
     part(U(Rc(13,52,18,54),Rc(12,53,12,54)),SHOE);part(U(Rc(21,52,26,54),Rc(27,53,27,54)),SHOE);
-    const sole=DET.shoe==='chunky'?'#b9b5ab':A.style==='minimal'?'#f2efe8':'#8f877a';g.r(12,55,7,1,sole);g.r(21,55,7,1,sole);if(DET.shoe==='chunky'){g.r(12,56,7,1,sole);g.r(21,56,7,1,sole);}
+    const sole=DET.shoe==='chunky'?'#b9b5ab':styleOf(A,'shoe')==='minimal'?'#f2efe8':'#8f877a';g.r(12,55,7,1,sole);g.r(21,55,7,1,sole);if(DET.shoe==='chunky'){g.r(12,56,7,1,sole);g.r(21,56,7,1,sole);}
     if(DET.shoe==='accent'){g.r(14,53,3,1,'#e04848');g.r(22,53,3,1,'#e04848');}}
   part(armL,SK);part(armR,SK);part(handL,SK);part(handR,SK);
   part(Rc(18,19,21,22),SK);
@@ -163,8 +174,30 @@ function itemSprite(kind,av){const A=av?avOf(av):AV;return pix('it2'+kind+avKey(
   if(kind==='hoodie'){part(U(N(U(torso,longS),neck),N(E(13.5,3,5,3.4),E(13.5,4,2.4,2))),C);part(Tz(14,19,10,17,9,18),[C[1],C[1],C[0]]);g.r(12,5,1,4,'#e8e2d6');g.r(15,5,1,4,'#e8e2d6');}
   if(kind==='coat'||kind==='rain'){part(N(U(Tz(4,23,8,19,7,20),longS),neck),C);for(let y=5;y<=23;y++)P(13,y,C[1]);if(kind==='coat'){[8,13,18].forEach(y=>{P(11,y,'#e2c28a');P(16,y,'#e2c28a');});}else part(N(E(13.5,3,5,3.4),E(13.5,4,2.4,2)),C);}
   if(kind==='shorts'&&A.skirt){part(Tz(5,17,9,18,5,22),C);for(let x=6;x<=21;x+=3)P(x,17,C[1]);}
+  if(kind==='tights'){const SC=palOf(A,'pants');part(Tz(2,13,9,18,5,22),SC);for(let x=6;x<=21;x+=3)P(x,13,SC[1]);part(Rc(9,14,12,22),TIGHTS);part(Rc(15,14,18,22),TIGHTS);}
   else if(kind==='shorts')part(N(Tz(6,15,7,20,6,21),Tz(11,15,13,14,13,14)),C);
   if(kind==='pants')part(N(Tz(2,22,8,19,6,21),Tz(8,22,13,14,13,14)),C);
+  {const D=detsOf(A)[kind];
+    if(kind==='tee'&&D==='graphic'){g.r(11,9,6,5,'#e8e2d6');g.r(12,10,4,3,'#e07a2c');}
+    if(kind==='tee'&&D==='collar'){P(11,3,'#f4f2ee');P(12,4,'#f4f2ee');P(16,3,'#f4f2ee');P(15,4,'#f4f2ee');g.r(13,5,1,4,C[1]);}
+    if(kind==='tee'&&D==='armstripe'){for(let y=5;y<=9;y++){P(2+Math.round((y-4)*0.2),y,'#f4f4f4');P(25-Math.round((y-4)*0.2),y,'#f4f4f4');}}
+    if(kind==='tank'&&D==='stripes')for(let y=8;y<=20;y+=3)for(let x=8;x<=19;x++)P(x,y,'#f4efe6');
+    if(kind==='long'&&D==='check')for(let y=4;y<=21;y++)for(let x=0;x<=27;x++)if((torso(x,y)||longS(x,y))&&(x%4===0||y%4===0))P(x,y,C[1]);
+    if(kind==='long'&&D==='stripes')for(let y=6;y<=21;y+=3)for(let x=0;x<=27;x++)if(torso(x,y)||longS(x,y))P(x,y,'#f4efe6');
+    if(kind==='long'&&D==='collar'){P(11,3,'#f6f8fc');P(12,4,'#f6f8fc');P(16,3,'#f6f8fc');P(15,4,'#f6f8fc');}
+    if(kind==='long'&&D==='armstripe')for(let y=5;y<=18;y++){P(Math.max(0,3-Math.round((y-4)*0.25)),y,'#f4f4f4');P(Math.min(27,24+Math.round((y-4)*0.25)),y,'#f4f4f4');}
+    if(kind==='sweater'&&D==='cable')for(let y=6;y<=19;y++){P(y%2?11:12,y,C[1]);P(y%2?16:15,y,C[1]);}
+    if(kind==='sweater'&&D==='knit')for(let y=6;y<=19;y+=2)for(let x=9;x<=18;x+=2)P(x+(y%4?1:0),y,C[1]);
+    if(kind==='light'&&(D==='lapels'||D==='blazer')){P(11,5,C[2]);P(12,6,C[2]);P(16,5,C[2]);P(15,6,C[2]);if(D==='blazer'){P(12,11,'#d9b45a');P(12,15,'#d9b45a');}}
+    if(kind==='light'&&D==='bomber'){g.r(8,20,12,2,C[1]);g.r(0,17,4,1,'#e07a2c');g.r(24,17,4,1,'#e07a2c');}
+    if(kind==='hoodie'&&D==='graphic'){g.r(10,10,8,3,'#e8e2d6');g.r(11,11,6,1,'#e07a2c');}
+    if(kind==='coat'&&D==='quilt')for(let y=7;y<=22;y+=3)for(let x=0;x<=27;x++)if(Tz(4,23,8,19,7,20)(x,y)||longS(x,y))P(x,y,C[1]);
+    if(kind==='coat'&&D==='belt')g.r(8,14,12,2,C[1]);
+    if(kind==='coat'&&D==='teddy')for(let i=0;i<34;i++){const x=1+((i*7)%26),y=5+((i*11)%18);if(Tz(4,23,8,19,7,20)(x,y)||longS(x,y))P(x,y,i%2?C[2]:C[1]);}
+    if((kind==='shorts'||kind==='pants')&&D==='pockets'){g.r(8,kind==='pants'?6:8,2,3,C[1]);g.r(18,kind==='pants'?6:8,2,3,C[1]);}
+    if(kind==='shorts'&&D==='sidestripe'){g.r(6,6,1,9,'#f4f4f4');g.r(21,6,1,9,'#f4f4f4');}
+    if(kind==='pants'&&D==='joggers'){g.r(6,20,7,2,C[1]);g.r(15,20,7,2,C[1]);}
+    if(kind==='pants'&&D==='ribs')for(let y=3;y<=21;y++)for(const x of [9,11,16,18])P(x,y,C[1]);}
   if(kind==='shoe'){const SH=palOf(A,'shoe');part(U(E(8,15,5.5,3),Rc(4,12,9,15)),SH);part(U(E(20,15,5.5,3),Rc(16,12,21,15)),SH);g.r(3,17,11,1,'#8f877a');g.r(15,17,11,1,'#8f877a');P(6,13,'#8f877a');P(18,13,'#8f877a');}
   if(kind==='sunglasses'){g.r(4,10,8,5,'#15131d');g.r(16,10,8,5,'#15131d');g.r(12,11,4,1,'#15131d');g.r(1,10,3,1,'#15131d');g.r(24,10,3,1,'#15131d');P(5,11,'#5b5780');P(17,11,'#5b5780');}
   if(kind==='beanie'){const BN=palOf(A,'beanie'),bm=E(13.5,17,10,12);part(N(bm,(x,y)=>y>17),BN);for(let x=3;x<=24;x++)for(let y=16;y<=18;y++)if(E(13.5,17,10.5,12)(x,y-2)||y<=17)if(x>=4&&x<=23)P(x,y,x%2?BN[1]:BN[0]);part(E(13.5,4.5,2.6,2.4),palOf(A,'shoe'));}
@@ -991,7 +1024,7 @@ class Component extends DCLogic {
     const savedOk=st.saved&&st.felt!=null;
     const fitHints={'too cold':'got it. warmer layer next time.','just right':'nice. same fit next time.','too warm':'got it. lighter next time.'};
     const dressList=(()=>{const o=fit.o,L=[];const A=(k,name,role)=>L.push({src:itemSprite(k),name,role,k});
-      A(o.top,nameOf(o.top),'torso');A(o.bottom,nameOf(o.bottom),'legs');A('shoe',nameOf('shoe'),'feet');if(o.outer!=='none')A(o.outer,nameOf(o.outer),'over the top');if(o.acc.includes('scarf'))A('scarf','scarf','neck');if(o.acc.includes('beanie'))A('beanie','beanie','head');if(o.acc.includes('sunglasses'))A('sunglasses','sunglasses','eyes');if(o.acc.includes('umbrella'))A('umbrella','umbrella','hand');return L;})();
+      A(o.top,nameOf(o.top),'torso');{const bk=skirtKind(o)==='tights'?'tights':o.bottom;A(bk,nameOf(bk),'legs');}A('shoe',nameOf('shoe'),'feet');if(o.outer!=='none')A(o.outer,nameOf(o.outer),'over the top');if(o.acc.includes('scarf'))A('scarf','scarf','neck');if(o.acc.includes('beanie'))A('beanie','beanie','head');if(o.acc.includes('sunglasses'))A('sunglasses','sunglasses','eyes');if(o.acc.includes('umbrella'))A('umbrella','umbrella','hand');return L;})();
     this._dressN=dressList.length;
     const shown=new Set(dressList.slice(0,Math.min(st.dressStep,dressList.length)).map(p=>p.k));
     const partial={top:fit.o.top,bottom:fit.o.bottom,outer:shown.has(fit.o.outer)?fit.o.outer:'none',acc:fit.o.acc.filter(a=>shown.has(a))};
@@ -1043,7 +1076,7 @@ class Component extends DCLogic {
           steps5:[0,1,2,3].map(k=>({w:k===ls?22:10,bg:k<=ls?'#f2c230':'rgba(255,241,210,0.35)'}))};})(),
       loginH:m?LHm:Math.max(620,vh),lgCardT:m?40:Math.round(Math.max(60,vh*0.1)),lgAL:m?Math.round(vw-12-38*3):Math.round(vw*0.72)-20*aS,lgAT:m?Math.round(LHx-LHb*0.1)-56*3:Math.round(Math.max(620,vh)*0.8)-56*aS,lgW:m?46*3:aW,lgH:m?58*3:aH,loginSprite:sprite(fit.o,P.mood,'stand'),
       gLogo:pix('glogo',()=>'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>')),
-      loginSkies:PKEYS.map(k=>({name:PRESETS[k].name,icon:icon(PRESETS[k].icon||PRESETS[k].cond),bg:k===pk?'#27233a':'#f3ead6',sh:k===pk?'0 0 0 2px #27233a':'inset 0 0 0 1px rgba(31,27,46,0.1)',onClick:()=>this.setPreset(k)})),skyName:P.name.toLowerCase()+' · '+T(P.temp),enterApp:()=>this.setOnboarded(true),onChangeStyle:this.props.onChangeStyle||null,
+      loginSkies:PKEYS.map(k=>({name:PRESETS[k].name,icon:icon(PRESETS[k].icon||PRESETS[k].cond),bg:k===pk?'#27233a':'#f3ead6',sh:k===pk?'0 0 0 2px #27233a':'inset 0 0 0 1px rgba(31,27,46,0.1)',onClick:()=>this.setPreset(k)})),skyName:P.name.toLowerCase()+' · '+T(P.temp),enterApp:()=>this.setOnboarded(true),onShop:this.props.onShop||null,
       openRate:()=>this.setState({rateOpen:true}),closeRate:()=>this.closeRateAnim(),
       logoSrc:sprite(outfitFor(70,'partly',5).o,'content','stand'),tunedOn:false,tunedLine:PREF?('tuned for you · '+(ADJ===0?'no change today':(ADJ>0?'+':'−')+Math.abs(ADJ)+' vs average')+' · sweet spot '+T(PREF.ideal)):'',placeLine:m?CITY:CITY+' · '+dateLine,cityName:CITY,dateLine,ld:this._phase!=='ready',bR:m?14:30,bT:(m?10:18)+40,sgnRopeW:m?92:150,sgnTxtW:m?112:210,sgnSky:({sunny:'#9fd0f2',partly:'#b6d2ea',sunset:'#f3b08a',heat:'#f1e2bc',overcast:'#c1c8d2',rain:'#8d97aa',snow:'#d7e1ec',night:'#3a4478'})[cond]||'#b6d2ea',sgnBadge:savedOk?'✓':'•',
       heroH,groundY,pL:0,pT:0,pW,pWc:m?'auto':'min(760px, calc(100% - 64px))',pPos:'relative',pMaxHc:'none',pMargin:m?'0 12px':'0 auto',wearMt:m?10:16,zoom:m?1.45:1,mob:m,desk:!m,skyNum:LD0?'':''+P.score,skyLabel:LD0?'':P.label.toLowerCase(),skyCap:'',skyMode:m?'center':'ridge',hsR,skyY:0,skyTop:0,skyRx:0,nFs:NF,lFs:m?(vh<760?26:30):34,skyAl:m?'center':'left',labMode:m?'below':'right',numX:m?0:Math.round(vw*0.045),numBase:m?Math.round(Math.max(150,heroH*0.19)+16+14+NF*0.74):Math.round(RY(0)-26),capAl:m?'center':'left',capStroke:'rgba(12,10,18,0.78)',capX:m?Math.round(vw/2):Math.round(vw*0.045),capY:m?Math.round(Math.max(150,heroH*0.19)+16):Math.round(RY(0)-26-150*0.74-16),sunX:m?0.84:0.8,curveStr:m?'':(LD0?LOAD_CURVE:P.curve).join(','),hourStr:P.curve.map((_,i)=>i===0?'now':hrs(i).replace('a','am').replace('p','pm')).join(','),bestI:best,selI:sel,skyShadow:m?'rgba(12,10,18,0.6)':(dark?'rgba(10,12,30,0.45)':'rgba(30,55,100,0.35)'),pPad,scoreFs:m?56:(heroH<760?72:92),wearFs:m?14:17,rTitleFs:m?20:26,
@@ -1093,4 +1126,4 @@ class Component extends DCLogic {
   }
 }
 
-export { Component, PRESETS, PORDER, INTDEF, outfitFor, wearOf, drawScene, sprite, itemSprite, setAvatar, nameOf, SKINS, HAIRC, HAIRS, STYLES, AV_DEFAULT };
+export { Component, PRESETS, PORDER, INTDEF, outfitFor, wearOf, drawScene, sprite, itemSprite, setAvatar, nameOf, SKINS, HAIRC, HAIRS, STYLES, AV_DEFAULT, COLORS, KINDS, palOf };

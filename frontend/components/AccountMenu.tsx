@@ -6,7 +6,7 @@ import LocationSearch, { type Place } from './LocationSearch';
 const rope: CSSProperties = { width: 4, height: '100%', background: 'repeating-linear-gradient(180deg,#7a5634 0 4px,#5e3c20 4px 8px)' };
 
 /** Hangs top-left in the app: where the forecast is for. Opens to change the place. */
-export default function AccountMenu({ place, onPlace, onEditSnug }: { place: Place; onPlace: (p: Place) => void; onEditSnug: () => void }) {
+export default function AccountMenu({ place, onPlace, onEditSnug, onShop }: { place: Place; onPlace: (p: Place) => void; onEditSnug: () => void; onShop: () => void }) {
   const [open, setOpen] = useState(false);
   const city = place.name.split(',')[0].toLowerCase();
   return (
@@ -25,7 +25,10 @@ export default function AccountMenu({ place, onPlace, onEditSnug }: { place: Pla
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 14, width: 300, background: WOOD_TEX, clipPath: CP }}>
             <div style={{ color: LIGHT, fontSize: 13, fontWeight: 800, textShadow: `1px 1px 0 ${WOOD}` }}>change place</div>
             <LocationSearch inline width={272} onPick={p => { setOpen(false); onPlace(p); }} />
-            <button onClick={() => { setOpen(false); onEditSnug(); }} style={{ alignSelf: 'flex-start', padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>✎ edit my snug</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setOpen(false); onShop(); }} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>🛍 go shopping</button>
+              <button onClick={() => { setOpen(false); onEditSnug(); }} style={{ padding: '6px 12px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800 }}>✎ edit my snug</button>
+            </div>
           </div>
         </div>
       )}

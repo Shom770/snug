@@ -23,8 +23,8 @@ export interface SnugProps {
   city?: string;
   /** the evening check-in was saved; reject to show the message on the save button */
   onCheckin?: (c: { felt: number; fit: string | null }) => Promise<void>;
-  /** opens the quick outfit/style change (the "change style" link under what to wear) */
-  onChangeStyle?: () => void;
+  /** opens snug's shop (the "go shopping" button under what to wear) */
+  onShop?: () => void;
   /** how snug looks (skin, hair, style...); see CharacterPanel */
   avatar?: { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean } | null;
   /** tonight's saved check-in, if any; the check-in card shows it as done */

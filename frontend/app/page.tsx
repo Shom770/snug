@@ -6,6 +6,8 @@ import AccountMenu from '../components/AccountMenu';
 import SignOutTag from '../components/SignOutTag';
 import AdjustPanel from '../components/AdjustPanel';
 import CharacterPanel, { type Avatar } from '../components/CharacterPanel';
+import ShopPanel from '../components/ShopPanel';
+import ShopNudge from '../components/ShopNudge';
 import LocationSearch, { type Place } from '../components/LocationSearch';
 import { api, SignIn, type User } from '../components/auth';
 import type { Outfit, WeatherInput } from '../lib/types';
@@ -62,8 +64,13 @@ export default function Home() {
   const [done, setDone] = useState(false);
   const [quick, setQuick] = useState(false); // the forecast showing was one we already had: reveal it with just a poof
   const [adjusting, setAdjusting] = useState(false);
-  // 'onboard': the character step between picking a place and tuning; 'edit': opened from the 📍 menu
-  const [character, setCharacter] = useState<'onboard' | 'edit' | 'shop' | null>(null);
+  // 'onboard': girl or boy, between picking a place and tuning; 'edit': skin, girl/boy, hair, from the 📍 menu
+  const [character, setCharacter] = useState<'onboard' | 'edit' | null>(null);
+  const [shopping, setShopping] = useState(false);
+  // the "take me shopping?" bubble shows until they've been to the shop or closed it
+  const [nudged, setNudged] = useState(() => { try { return localStorage.getItem('snug-shop-nudge') === 'done'; } catch { return false; } });
+  const settleNudge = () => { setNudged(true); try { localStorage.setItem('snug-shop-nudge', 'done'); } catch { /* private mode */ } };
+  const openShop = () => { settleNudge(); setShopping(true); };
   const [refresh, setRefresh] = useState(0); // bump to re-run the forecast (after tuning)
   const loadedHour = useRef(''); // the hour the showing forecast was made in
   const lastRefresh = useRef(0);
@@ -186,21 +193,24 @@ export default function Home() {
   if (!me) return <div style={{ minHeight: '100vh', background: '#f3ede1' }} />;
   return (
     <div style={{ position: 'relative' }}>
-      <Snug weather={showApp ? weather : undefined} units={prefs?.units} city={place.name.split(',')[0].toLowerCase()} loading={!done} quick={quick} checkin={checkin} avatar={prefs?.avatar} onChangeStyle={() => setCharacter('shop')}
+      <Snug weather={showApp ? weather : undefined} units={prefs?.units} city={place.name.split(',')[0].toLowerCase()} loading={!done} quick={quick} checkin={checkin} avatar={prefs?.avatar} onShop={openShop}
         showApp={showApp} loginGoto={goto} placeSet={!!prefs?.place} onFinishLogin={onFinishLogin} onCheckin={onCheckin} />
       {!showApp && authSlot && createPortal(<SignIn user={user} onUser={signedIn} onContinue={() => step(prefs?.place ? 2 : 1)} onSignOut={signOut} />, authSlot)}
       {!showApp && locSlot && createPortal(<LocationSearch onPick={p => savePrefs({ place: p }).then(() => setCharacter('onboard'), console.error)} />, locSlot)}
       {showApp && user && (
         <div style={{ position: 'absolute', left: 16, top: 0, zIndex: 6 }}>
-          <AccountMenu place={place} onPlace={p => savePrefs({ place: p }).catch(console.error)} onEditSnug={() => setCharacter('edit')} />
+          <AccountMenu place={place} onPlace={p => savePrefs({ place: p }).catch(console.error)} onEditSnug={() => setCharacter('edit')} onShop={openShop} />
         </div>
       )}
       {showApp && user && done && <SignOutTag user={user} onSignOut={signOut} onAdjust={() => setAdjusting(true)} />}
+      {showApp && user && done && !nudged && !shopping && !Object.keys(prefs?.avatar?.wardrobe ?? {}).length && <ShopNudge onShop={openShop} onDismiss={settleNudge} />}
       {character && (
-        <CharacterPanel initial={prefs?.avatar} shopOnly={character === 'shop'} skipLabel={character === 'onboard' ? 'skip · keep the default' : 'cancel'}
+        <CharacterPanel initial={prefs?.avatar} mode={character}
           onDone={a => { savePrefs({ avatar: a }).catch(console.error); if (character === 'onboard') step(2); setCharacter(null); }}
           onSkip={() => { if (character === 'onboard') step(2); setCharacter(null); }} />
       )}
+      {shopping && <ShopPanel initial={prefs?.avatar} onClose={() => setShopping(false)}
+        onDone={a => { savePrefs({ avatar: a }).catch(console.error); setShopping(false); }} />}
       {adjusting && <AdjustPanel onClose={changed => { setAdjusting(false); if (changed) setRefresh(r => r + 1); }} />}
     </div>
   );
