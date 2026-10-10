@@ -41,6 +41,12 @@ export interface WeatherInput extends HourInput {
   night?: boolean;
   /** the sun low on the horizon right now (sunset or sunrise light); from the backend's sun position */
   golden?: boolean;
+  /** the sun is down (after sunset, before sunrise) */
+  dark?: boolean;
+  /** a whole day's forecast from 8am (tomorrow's outfit), not right now */
+  day?: boolean;
+  /** local time of the reading at the place, e.g. 2026-10-10T21:15 */
+  time?: string;
   /** up to 12 hours starting now; missing fields fall back to the current values */
   hourly?: HourInput[];
   /** skip the built-in comfort model */

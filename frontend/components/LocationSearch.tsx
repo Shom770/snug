@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api, CP, CREAM, INK, LIGHT, WOOD } from './auth';
 
-export interface Place { name: string; lat: number; lon: number }
+export interface Place { name: string; lat: number; lon: number; cc?: string | null }
 
 /** Type a city, town or postal code; pick a suggestion. Or use the browser's location. */
 /** inline: suggestions push content down instead of floating (for use inside a clipped panel) */

@@ -5,7 +5,7 @@ import { AV_DEFAULT, HAIRC, HAIRS, SKINS, sprite } from '../lib/engine';
 
 /** One piece snug owns: which style's version of a kind of clothing, in an optional shop colour. */
 export interface Piece { id?: string; s?: string; c?: string }
-export interface Avatar { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean; wardrobe?: Record<string, Piece | Piece[]> }
+export interface Avatar { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean; wardrobe?: Record<string, Piece | Piece[]>; extras?: Record<string, string | null> }
 export type Outfit = { top: string; outer: string; bottom: string; acc: string[] };
 
 const SK = SKINS as Record<string, string[]>, HC = HAIRC as Record<string, string[]>;

@@ -42,7 +42,9 @@ class Avatar(BaseModel):
     style: str = Field('casual', max_length=16)  # the overall look, for any kind of piece not picked at the shop
     skirt: bool = False
     # kind -> the pieces snug owns of it (snug rotates through them day to day); a single piece from before still loads
-    wardrobe: dict[Annotated[str, StringConstraints(max_length=16)], Annotated[list[Piece], Field(max_length=12)] | Piece] = Field(default_factory=dict, max_length=20)
+    wardrobe: dict[Annotated[str, StringConstraints(max_length=16)], Annotated[list[Piece], Field(max_length=12)] | Piece] = Field(default_factory=dict, max_length=24)
+    # the extras they've chosen to wear (bag, hat, glasses, chain, headphones): kind -> piece id, or none
+    extras: dict[Annotated[str, StringConstraints(max_length=16)], Annotated[str, StringConstraints(max_length=32)] | None] = Field(default_factory=dict, max_length=8)
 
 
 class Prefs(BaseModel):
