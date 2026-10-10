@@ -1,4 +1,4 @@
-import { describeDay } from './descriptors';
+import { describeDay, sunCover } from './descriptors';
 import type { Condition, Description, HourInput, NormalizedWeather, OutfitFn, SceneCond, ScenePreset, WeatherInput, Activity, Mood } from './types';
 
 export const CONDITIONS: Condition[] = ['clear', 'partly', 'cloudy', 'overcast', 'fog', 'drizzle', 'rain', 'storm', 'hail', 'sleet', 'snow', 'blizzard', 'windy', 'smoke', 'heat', 'humid'];
@@ -84,7 +84,7 @@ export function normalize(input: WeatherInput = {}): NormalizedWeather {
     intensity: HAS_INTENSITY.includes(condition) ? +(input.intensity ?? DEF_INT[condition] ?? 0.5) : 0,
     night: input.night ?? (hour >= 20 || hour < 6),
     golden: input.golden ?? (input.night == null && hour >= 18 && hour < 20), // without the real sun position, a rough evening guess
-    cloudLow: input.cloudLow ?? null, cloudMid: input.cloudMid ?? null, cloudHigh: input.cloudHigh ?? null,
+    cloudLow: input.cloudLow ?? null, cloudMid: input.cloudMid ?? null, cloudHigh: input.cloudHigh ?? null, sunshine: input.sunshine ?? null,
     score: input.score, curve: input.curve, label: input.label, hourly: input.hourly, date: input.date, outfit: input.outfit,
   };
 }
@@ -101,12 +101,12 @@ export function buildPreset(input: WeatherInput, outfitFor?: OutfitFn): BuildRes
   if (w.score != null) curve[0] = score;
   const best = curve.indexOf(Math.max(...curve)), bh = (w.hour + best) % 24;
   const d = describeDay(w, score, { best: (bh % 12 || 12) + (bh < 12 ? 'am' : 'pm') });
-  // For sky-only weather the look comes from the clouds that block the sun: low and mid layers (thin high cirrus
-  // doesn't). Only a near-complete deck (88%+) is the grey ceiling with no sun; below that the renderer draws that
-  // share of the sky as clouds, so mostly cloudy still has gaps and glimpses of sun. Without layer data, total cover.
+  // For sky-only weather the look comes from the clouds that block the sun (sunCover: thin high cirrus, or any cloud
+  // the sun was shining through, doesn't). Only a near-complete deck (88%+) is the grey ceiling with no sun; below that
+  // the renderer draws that share of the sky as clouds, so mostly cloudy still has gaps and glimpses of sun.
   let cond: SceneCond = sc.cond;
+  const opaque = sunCover(w);
   if (SKY_ONLY.includes(w.condition)) {
-    const opaque = w.cloudLow != null && w.cloudMid != null ? 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) : w.clouds;
     cond = opaque >= 88 ? 'overcast' : opaque >= 20 || w.clouds >= 40 ? 'partly' : 'sunny';
   }
   const clearish = cond === 'sunny' || cond === 'partly';
@@ -125,7 +125,7 @@ export function buildPreset(input: WeatherInput, outfitFor?: OutfitFn): BuildRes
     wind: Math.round(w.wind), gust: Math.round(w.gust), dir: w.dir, clouds: Math.round(w.clouds),
     score, label: label.charAt(0).toUpperCase() + label.slice(1), start: w.hour, curve,
     act, pose, mood, intensity: w.intensity, night: w.night && cond !== 'night', noTune: w.score != null ? 1 : 0,
-    cloudLow: w.cloudLow, cloudMid: w.cloudMid, cloudHigh: w.cloudHigh,
+    cloudLow: w.cloudLow, cloudMid: w.cloudMid, cloudHigh: w.cloudHigh, cover: Math.round(opaque),
   };
   if (w.outfit) preset.outfit = w.outfit;
   else if (outfitFor) preset.outfit = outfitFor(w.feels, cond, w.wind).o;

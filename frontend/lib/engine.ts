@@ -58,7 +58,7 @@ function avOf(a){const v={...AV_DEFAULT,...(a||{})};if(!SKINS[v.skin])v.skin='li
   Object.entries(v.wardrobe||{}).forEach(([k,raw])=>{if(!KINDS.includes(k)||!raw)return;const list=[];(Array.isArray(raw)?raw:[raw]).forEach(it=>{if(!it)return;const c=COLORS[it.c]?{c:it.c}:{};if(ITEM[it.id]&&ITEM[it.id].kind===k)list.push({id:it.id,...c});else if(STYLES[it.s])list.push({s:it.s,...c});});
     if(list.length)w[k]=list;});
   // owning several of a kind, snug changes day to day, with one vibe across the outfit (see dressFrom)
-  v.wardrobe=w;v.worn=dressFrom(w,day,KINDS);return v;}
+  v.wardrobe=w;v.worn=dressFrom(w,day,KINDS,!!v.wet);return v;}
 function setAvatar(a){AV=avOf(a);}
 const avKey=a=>[a.skin,a.body,a.hair,a.hairColor,a.style,a.skirt?1:0,KINDS.map(k=>{const w=wornOf(a)[k];return w?(w.id||w.s)+(w.c?':'+w.c:''):'';}).join(',')].join('.');
 // a piece's style (what it is and its details) and colour: the wardrobe's pick, else the overall style
@@ -277,7 +277,7 @@ function itemSprite(kind,av){const A=av?avOf(av):AV;return pix('it2'+kind+avKey(
       else{g.r(4,10,8,5,C[0]);g.r(16,10,8,5,C[0]);P(5,11,C[2]);P(17,11,C[2]);}
       g.r(12,11,4,1,ink);g.r(1,10,2,1,ink);g.r(25,10,2,1,ink);}}}
   g.outline('#1c1a28');return g.url();});}
-function wearOf(o){const cap=w=>w[0].toUpperCase()+w.slice(1);const parts=[cap(nameOf(o.top||'tee'))];if(o.outer&&o.outer!=='none')parts.push(nameOf(o.outer));else if(o.bottom==='shorts')parts.push(nameOf('shorts'));const an=(o.acc||[]).map((a,i)=>i===0?a[0].toUpperCase()+a.slice(1):a);return {o:{top:o.top||'tee',outer:o.outer||'none',bottom:o.bottom||'pants',acc:o.acc||[]},wear:parts.join(' + ')+'.'+(an.length?' '+an.join(', ')+'.':'')};}
+function wearOf(o){const cap=w=>w[0].toUpperCase()+w.slice(1);const parts=[cap(nameOf(o.top||'tee'))];if(o.outer&&o.outer!=='none')parts.push(nameOf(o.outer));else if(o.bottom==='shorts')parts.push(nameOf('shorts'));const an=(o.acc||[]).map((a,i)=>i===0?a[0].toUpperCase()+a.slice(1):a);return {o:{top:o.top||'tee',outer:o.outer||'none',bottom:o.bottom||'pants',acc:o.acc||[],boots:!!o.boots},wear:parts.join(' + ')+'.'+(an.length?' '+an.join(', ')+'.':'')};}
 function outfitFor(t,c,w){
   const top=t>=78?'tank':t>=62?'tee':t>=50?'long':'sweater';
   const outer=c==='rain'?'rain':t<40?'coat':t<55?'hoodie':((t<68&&(w>=10||c==='partly'))||((c==='sunset'||c==='night')&&t<72))?'light':'none';
@@ -286,7 +286,7 @@ function outfitFor(t,c,w){
   const TN={tank:'Tank',tee:'Tee',long:'Long sleeve',sweater:'Sweater'},ON={light:'light jacket',hoodie:'hoodie',coat:'coat',rain:'rain jacket'};
   const parts=[TN[top]];if(outer!=='none')parts.push(ON[outer]);else if(bottom==='shorts')parts.push('shorts');
   const an=acc.map((a,i)=>i===0?a[0].toUpperCase()+a.slice(1):a);
-  return {o:{top,outer,bottom,acc},wear:parts.join(' + ')+'.'+(an.length?' '+an.join(', ')+'.':'')};
+  return {o:{top,outer,bottom,acc,boots:c==='rain'},wear:parts.join(' + ')+'.'+(an.length?' '+an.join(', ')+'.':'')};
 }
 
 const svg=(inner,vb=24)=>'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vb} ${vb}">${inner}</svg>`);
@@ -1060,6 +1060,7 @@ class Component extends DCLogic {
     const TH=dark?{bg:'rgba(22,26,48,0.42)',fg:'#f3efe6',muted:'rgba(243,239,230,0.8)',border:'rgba(255,255,255,0.14)',track:'rgba(255,255,255,0.16)'}:{bg:'rgba(255,251,244,0.56)',fg:'#27233a',muted:'#4a4558',border:'rgba(255,255,255,0.5)',track:'rgba(39,35,58,0.12)'};
     const T=f=>(C?Math.round((f-32)*5/9):f)+'°',Wv=w=>''+(C?Math.round(w*1.609):w),WUn=C?'km/h':'mph',WU='Wind '+WUn;
     const fit0=P.outfit?wearOf(P.outfit):outfitFor(P.temp,cond,P.wind),fit=st.night&&fit0.o.acc.includes('sunglasses')?wearOf({...fit0.o,acc:fit0.o.acc.filter(a=>a!=='sunglasses')}):fit0;
+    if(fit.o.boots)setAvatar({...this.props.avatar,wet:true}); // a puddle day: rain boots if they own them
     const feltV=st.felt??P.score,delta=feltV-P.score;
     const moodOf=f=>f>=80?'happy':f>=65?'content':f>=50?'meh':'grumpy';
     const mood=rating?(st.rateFit==='too cold'?'cold':st.rateFit==='too warm'?'hot':st.felt!=null?moodOf(st.felt):P.mood):P.mood;
@@ -1082,7 +1083,7 @@ class Component extends DCLogic {
     const sp=Math.max(130*dK,Math.min(260,(vw-areaL)/3.2));
     const dSx=m?Math.round(vw*0.79):Math.round(vw*0.44+Math.min(300,vw*0.2))||Math.round(Math.min(vw-90*dK,aCx+sp));
     const hBy=m?66:Math.round(Math.max(90,heroH*0.15));
-    const fd=P.feels-P.temp,cw=P.clouds<=5?'Clear':P.clouds<=25?'Mostly clear':P.clouds<=62?'Partly cloudy':P.clouds<=87?'Mostly cloudy':'Overcast';
+    const fd=P.feels-P.temp,cv=P.cover??P.clouds,cw=cv<=5&&P.clouds<=25?'Clear':cv<=25?(P.clouds>=40&&!NIGHT&&cond!=='night'?'Mostly sunny':'Mostly clear'):cv<=62?(P.clouds-cv>=25&&!NIGHT&&cond!=='night'?'Partly sunny':'Partly cloudy'):cv<=87?'Mostly cloudy':'Overcast';
     const K=dK,wd='#fff1d6',wsh='0 1px 0 rgba(60,30,10,0.55)';
     const signs=[{a:T(P.temp),b:'feels '+T(P.feels),lw:Math.round(88*K),h:Math.round(40*K),f1:Math.round(17*K),f2:Math.max(10,Math.round(10*K)),fd:'column',gap:1,c:wd,sh:wsh},
       {a:Wv(P.wind)+' '+WUn,b:COMPASS[Math.round(P.dir/22.5)%16]+' · gusts '+Wv(P.gust),lw:Math.round(82*K),h:Math.round(34*K),f1:Math.round(13*K),f2:Math.max(9,Math.round(8.5*K)),fd:'column',gap:1,c:wd,sh:wsh},
@@ -1112,7 +1113,7 @@ class Component extends DCLogic {
     this._geo={aT,aW,aH,aCx,aS,groundY,heroH,vw,m,hsR,sitDy:12.5*aS,cond:SCK,night:NIGHT||cond==='night',wind:P.wind,city:CITY,precipK:pkind(P),sceneKey:SCK+'|'+(P.precip||'')+'|'+(P.storm||P.fxk||'')+'|'+st.season,
       curve:P.curve,curveStr:P.curve.join(','),best:P.curve.indexOf(Math.max(...P.curve)),score:P.score,label:P.label.toLowerCase(),avatarSrc,sprites:{stand:sprite(LOAD_FIT,'happy','stand'),sit:sprite(LOAD_FIT,'content','sit'),kite:sprite(LOAD_FIT,'happy','kite')}};
     return {
-      rootRef:this.rootRef,dressRef:this.dressRef,dressSprite:sprite(partial,P.mood==='cold'||P.mood==='hot'?P.mood:'content','stand'),dressW:138,dressH:174,dressL:60,winW:m?180:220,winH:m?210:220,ctaMt:m?14:0,dressPadX:m?14:28,mFg:'#fff8e6',mMuted:'rgba(255,248,230,0.85)',meadowBg:(PAL[cond]||PAL.sunny).g1,patchBg:rgba((PAL[cond]||PAL.sunny).path,0.0),kidX:m?Math.round(vw/2):Math.round(vw/2-((m?170:200)+22)/2),kidY:m?330:340,pathL:Math.round(vw*0.66-(heroH-groundY)*0.45),pathR:Math.round(vw*0.66+(heroH-groundY)*0.55),tagsW:m?170:200,cardPadT:m?54:58,sceneCond:SCK,cloudPct:P.cloudLow!=null&&P.cloudMid!=null?Math.round(100*(1-(1-P.cloudLow/100)*(1-P.cloudMid/100))):P.clouds,cirrusPct:P.cloudHigh!=null?Math.round(P.cloudHigh):'',winSky0:PAL[SCK].sky[1],winSky1:PAL[SCK].sky[2],wallBg:mix('#f6ecd9',PAL[SCK].g0,0.06),awning:pix('awn',()=>{let p='';p+='<rect width="24" height="28" fill="#d65a4a"/><rect x="24" width="24" height="28" fill="#fbf1dc"/><rect y="0" width="48" height="3" fill="#5e3c20"/>';p+='<path d="M0 28h24v4h-2v2h-3v2h-6v-2h-3v-2H2v-2H0z" fill="#d65a4a"/><path d="M24 28h24v4h-2v2h-3v2h-6v-2h-3v-2h-8v-2h-2z" fill="#fbf1dc"/><rect y="26" width="48" height="2" fill="rgba(60,25,10,0.18)"/>';return 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 40" shape-rendering="crispEdges">'+p+'</svg>');}),replayDress:()=>this.startDress(),
+      rootRef:this.rootRef,dressRef:this.dressRef,dressSprite:sprite(partial,P.mood==='cold'||P.mood==='hot'?P.mood:'content','stand'),dressW:138,dressH:174,dressL:60,winW:m?180:220,winH:m?210:220,ctaMt:m?14:0,dressPadX:m?14:28,mFg:'#fff8e6',mMuted:'rgba(255,248,230,0.85)',meadowBg:(PAL[cond]||PAL.sunny).g1,patchBg:rgba((PAL[cond]||PAL.sunny).path,0.0),kidX:m?Math.round(vw/2):Math.round(vw/2-((m?170:200)+22)/2),kidY:m?330:340,pathL:Math.round(vw*0.66-(heroH-groundY)*0.45),pathR:Math.round(vw*0.66+(heroH-groundY)*0.55),tagsW:m?170:200,cardPadT:m?54:58,sceneCond:SCK,cloudPct:P.cover??P.clouds,cirrusPct:P.cloudHigh!=null?Math.round(P.cloudHigh):'',winSky0:PAL[SCK].sky[1],winSky1:PAL[SCK].sky[2],wallBg:mix('#f6ecd9',PAL[SCK].g0,0.06),awning:pix('awn',()=>{let p='';p+='<rect width="24" height="28" fill="#d65a4a"/><rect x="24" width="24" height="28" fill="#fbf1dc"/><rect y="0" width="48" height="3" fill="#5e3c20"/>';p+='<path d="M0 28h24v4h-2v2h-3v2h-6v-2h-3v-2H2v-2H0z" fill="#d65a4a"/><path d="M24 28h24v4h-2v2h-3v2h-6v-2h-3v-2h-8v-2h-2z" fill="#fbf1dc"/><rect y="26" width="48" height="2" fill="rgba(60,25,10,0.18)"/>';return 'data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 40" shape-rendering="crispEdges">'+p+'</svg>');}),replayDress:()=>this.startDress(),
       seasonOpts:[['auto','season: auto ('+(seasonNow('auto').replace('|',' · ')||'none')+')'],['none','no event'],['clim:spring','spring (plain)'],['clim:summer','summer (plain)'],['clim:autumn','autumn (plain)'],['clim:winter','winter (plain)'],...EV_NAMES].map(([v,t])=>({v,t,sel:st.season===v})),season:seasonNow(st.season),seasonAutoName:'auto ('+(seasonNow('auto')||'none')+')',onSeason:e=>{const v=e.target.value;this.setState({season:v});try{localStorage.setItem('snug-season',v);}catch(er){}},
       intV:PK0?INT.toFixed(2):'',pkindV:PK0,avFilter:(PK0==='rain'||PK0==='drizzle'||PK0==='sleet')&&INT>0.7?'saturate('+(1-(INT-0.7)*1.2).toFixed(2)+') brightness('+(1-(INT-0.7)*0.5).toFixed(2)+') hue-rotate(-8deg)':'none',showInt:!!PK0,intVal:Math.round(INT*100),intName:{rain:'rain',drizzle:'rain',sleet:'sleet',hail:'hail',snow:'snow'}[PK0]||'rain',intWord:INT<0.25?'light':INT<0.5?'moderate':INT<0.75?'heavy':(PK0==='snow'?'deep':PK0==='hail'?'severe':'flooding'),onInt:e=>this.setState({intensity:+e.target.value/100}),
       ridgeTags,rgL:Math.round(vw*0.02),rgW:Math.round(vw*0.96),rgT,rgH:Math.round(groundY-rgT),ridgeLeave:()=>this.setState({hourSel:null}),sliderRef:this.sliderRef,inApp,inTune:false,inLogin:!inApp,inRate:rating,notRate:!rating,

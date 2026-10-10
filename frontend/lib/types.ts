@@ -9,6 +9,8 @@ export interface Outfit {
   outer: 'none' | 'light' | 'hoodie' | 'coat' | 'rain';
   bottom: 'shorts' | 'pants';
   acc: Array<'sunglasses' | 'umbrella' | 'beanie' | 'scarf'>;
+  /** rain boots: the ground is properly wet */
+  boots?: boolean;
 }
 
 export interface HourInput {
@@ -17,6 +19,8 @@ export interface HourInput {
   cloudLow?: number | null;
   cloudMid?: number | null;
   cloudHigh?: number | null;
+  /** % of the hour the sun was out (daylight only); thin cloud lets it through */
+  sunshine?: number | null;
   intensity?: number;
   temp?: number;
   feels?: number;
@@ -67,6 +71,7 @@ export interface NormalizedWeather {
   cloudLow: number | null;
   cloudMid: number | null;
   cloudHigh: number | null;
+  sunshine: number | null;
   score?: number;
   curve?: number[];
   label?: string;
@@ -120,6 +125,8 @@ export interface ScenePreset {
   cloudLow?: number | null;
   cloudMid?: number | null;
   cloudHigh?: number | null;
+  /** % of the sky hiding the sun (see sunCover) */
+  cover?: number;
 }
 
 export type OutfitFn = (feels: number, cond: SceneCond | string, wind: number) => { o: Outfit };

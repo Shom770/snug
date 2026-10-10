@@ -10,5 +10,5 @@ export function outfitFor(t: number, c: string, w: number): { o: Outfit } {
   if (c === 'rain') acc.push('umbrella');
   if (t < 42) acc.push('beanie');
   if (t < 35) acc.push('scarf');
-  return { o: { top, outer, bottom, acc } };
+  return { o: { top, outer, bottom, acc, boots: c === 'rain' } };
 }

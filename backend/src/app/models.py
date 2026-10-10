@@ -15,6 +15,7 @@ class Outfit(BaseModel):
     outer: Literal['none', 'light', 'hoodie', 'coat', 'rain']
     bottom: Literal['shorts', 'pants']
     acc: list[Literal['sunglasses', 'umbrella', 'beanie', 'scarf']]
+    boots: bool = False  # rain boots: the ground is properly wet (not just a chance of a shower)
 
 
 class HourWeather(BaseModel):
@@ -34,6 +35,8 @@ class HourWeather(BaseModel):
     cloudLow: float | None = None
     cloudMid: float | None = None
     cloudHigh: float | None = None
+    # % of the hour the sun was out (daylight only; null at night or unknown). Thin cloud lets it through
+    sunshine: float | None = None
 
 
 class Location(BaseModel):

@@ -14,6 +14,7 @@ from . import jev
 from .descriptors import describe
 from .db import Row
 from .models import Forecast, Outfit, Weather
+from .weather import sun_cover
 
 # 10 levels (Jev's max). The expected level 0..9 maps onto a 1-100 comfort score.
 COMFORT = ['dangerous', 'miserable', 'bad', 'rough', 'unpleasant', 'meh', 'okay', 'comfortable', 'pleasant', 'perfect']
@@ -42,17 +43,20 @@ FACTORS = {
     'snow': 'snow', 'ice': 'ice, sleet or hail', 'fog': 'fog', 'smoke': 'smoke or haze', 'gloom': 'grey, fully overcast skies (no sun at all)',
 }
 HAS_INTENSITY = {'drizzle', 'rain', 'storm', 'hail', 'sleet', 'snow', 'blizzard'}
+# rain boots only for real puddles: this much rain (inches) over the next hours they're out, or heavy rain right now
+BOOTS_IN, BOOTS_HOURS = 0.2, 8
+WET = {'drizzle', 'rain', 'storm', 'hail', 'sleet'}
 
 
 def _state(w: Weather) -> str:
     now = datetime.fromisoformat(w.time)
     rows = '\n'.join(
         f"{h.hour}:00 {(('light ' if h.intensity < 0.35 else 'heavy ' if h.intensity >= 0.7 else '') if h.condition in HAS_INTENSITY else '') + h.condition} "
-        f"{round(h.temp)} {round(h.feels)} {round(h.humidity)} {round(h.wind)} {round(h.gust)} {round(h.clouds)} {round(h.pop)} {h.precip:g}"
+        f"{round(h.temp)} {round(h.feels)} {round(h.humidity)} {round(h.wind)} {round(h.gust)} {round(h.clouds)} {round(sun_cover(h))} {round(h.pop)} {h.precip:g}"
         for h in w.hourly
     )
     return (f"{w.city}, {now:%a %b %-d}, {'night' if w.night else 'daytime'}. Low {round(w.lo)}°F, high {round(w.hi)}°F.\n"
-            f'hour sky temp°F feels°F humidity% wind_mph gust_mph cloud% rain_chance% precip_in\n{rows}')
+            f'hour sky temp°F feels°F humidity% wind_mph gust_mph cloud% sun_blocked% rain_chance% precip_in\n{rows}')
 
 
 def _history(rows: list[tuple[Row, Row]]) -> str:
@@ -127,6 +131,7 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     elif layer == 'layer':  # a hoodie on a dry, calm day; a jacket when it's windy or damp
         dry = max(h.pop for h in w.hourly[:6]) < 30 and w.wind < 15 and w.gust < 25
         layer = 'hoodie' if dry else 'light'
+    rain_in = sum(h.precip for h in w.hourly[:BOOTS_HOURS] if h.condition in WET)
     outfit = Outfit(
         top=top_,
         outer=layer,
@@ -135,10 +140,10 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
         # no sunglasses after dark, and no umbrella when what's falling is snow
         acc=[k for k in ACCESSORIES if jev.yes(a.get(k)) and not (k == 'sunglasses' and w.night)
              and not (k == 'umbrella' and w.condition in ('snow', 'blizzard'))],
+        boots=rain_in >= BOOTS_IN or (w.condition in ('rain', 'storm') and w.intensity >= 0.55),
     )
-    # the sun-hiding cloud (low and mid layers together; thin high cirrus doesn't hide it), as the scene draws it
-    cover = 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) if w.cloudLow is not None and w.cloudMid is not None else w.clouds
+    # the sun-hiding cloud, as the scene draws it
     label, band, factor = describe(jev.choice(a.get('factor'), FACTORS, 'none'), curve[0], w.hour, w.night,
-                                   datetime.fromisoformat(w.time).toordinal(), cover=cover, golden=w.golden)
+                                   datetime.fromisoformat(w.time).toordinal(), cover=sun_cover(w), golden=w.golden)
     return Forecast(score=curve[0], curve=curve, startHour=w.hour, label=label, band=band, factor=factor,
                     outfit=outfit, model=model, ms=round((time.perf_counter() - t0) * 1000), personalized=bool(history or tuning or tuned))

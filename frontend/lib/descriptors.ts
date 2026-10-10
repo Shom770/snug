@@ -84,13 +84,20 @@ export function dominantFactor(w: NormalizedWeather): Factor {
 const seedOf = (w: NormalizedWeather): number => { const d = w.date ? new Date(w.date) : new Date(); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); };
 const pick = <T,>(arr: T[], seed: number): T => arr[Math.abs(seed) % arr.length];
 
+/** % of the sky hiding the sun: low and mid cloud (thin high cirrus lets it through), never more than the total, and in
+ * daylight no more than the share of the hour the sun was blocked. Same as the backend's sun_cover(). */
+export function sunCover(w: Pick<NormalizedWeather, 'clouds' | 'cloudLow' | 'cloudMid' | 'sunshine'>): number {
+  const cover = w.cloudLow != null && w.cloudMid != null ? Math.min(w.clouds, 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100))) : w.clouds;
+  return w.sunshine != null ? Math.min(cover, 100 - w.sunshine) : cover;
+}
+
 export function describeDay(w: NormalizedWeather, score: number, extra: { best?: string } = {}): Description {
   const band = bandOf(score);
   let factor: Factor = dominantFactor(w);
   const hour = w.hour ?? 12;
-  // the sky words follow the cover that hides the sun (low and mid cloud together), same as the backend's describe():
-  // grey only for a (nearly) complete deck, sun and clouds in between; evening/night words only under an open sky
-  const cover = w.cloudLow != null && w.cloudMid != null ? 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100)) : w.clouds;
+  // the sky words follow the cover that hides the sun, same as the backend's describe(): grey only for a (nearly)
+  // complete deck, sun and clouds in between; evening/night words only under an open sky
+  const cover = sunCover(w);
   if (factor === 'none' || factor === 'gloom') factor = cover >= 88 ? 'gloom' : cover >= 62 ? 'mostly' : cover >= 25 ? 'partly' : 'none';
   if (factor === 'partly' && w.night) return { label: 'moody', band, factor, blurb: 'clouds and stars.', options: ['moody'] };
   if (factor === 'none' && w.night && DESCRIPTORS.night[band]) factor = 'night';

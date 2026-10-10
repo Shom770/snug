@@ -268,18 +268,23 @@ const KIT_LIST = {
   beachy: { label: 'beachy', items: { tank: ['stripe-tank', 'tiedye-tank'], tee: ['breton-tee', 'tiedye-tee'], long: ['stripe-long', 'linen-shirt'], sweater: ['crewneck'], light: ['denim-jacket'], hoodie: ['tiedye-hoodie'], coat: ['parka'], rain: ['raincoat'], shorts: ['board-shorts', 'linen-shorts', 'cutoffs'], pants: ['linen-pants', 'wide-jeans'], shoe: ['checker-slipons'], beanie: ['beanie'], scarf: ['scarf'], sunglasses: ['star-shades', 'round-shades'], umbrella: ['stripe-umbrella'] }, girls: { shorts: ['denim-skirt'] } },
   playful: { label: 'playful', items: { tank: ['cherry-tank'], tee: ['heart-tee', 'smiley-tee', 'frog-tee', 'star-tee'], long: ['heart-long', 'stripe-long'], sweater: ['heart-sweater', 'fuzzy'], light: ['varsity'], hoodie: ['smiley-hoodie', 'heart-hoodie'], coat: ['pastel-puffer', 'duffle'], rain: ['dot-raincoat', 'frog-raincoat'], shorts: ['cutoffs'], pants: ['wide-jeans'], shoe: ['hightops'], beanie: ['bear-beanie', 'frog-beanie'], scarf: ['dot-scarf'], sunglasses: ['heart-shades'], umbrella: ['dot-umbrella', 'frog-umbrella'] }, girls: { shorts: ['pleat-skirt'], shoe: ['maryjanes'] } },
 };
+// pieces only for a properly wet day (puddles), never just because they match the vibe
+const WET_ONLY = new Set(['rainboots']);
 // legacy per-style picks, as a vibe tag
 export const STYLE_TAG = { casual: 'classic', surf: 'beachy', minimal: 'classic', sporty: 'sporty', street: 'street', preppy: 'preppy', cozy: 'cozy' };
 /** What snug wears today from what it owns: one vibe for the day (cycling through the tags they own), and every
- * piece picked to match it, or else to match the rest of the outfit, so joggers don't end up with a polo. */
-export function dressFrom(wardrobe, day, kinds) {
+ * piece picked to match it, or else to match the rest of the outfit, so joggers don't end up with a polo. Rain boots
+ * come out on wet days (and always do then, if owned); otherwise only when they're the only shoes. */
+export function dressFrom(wardrobe, day, kinds, wet = false) {
   const tagsOf = p => (p.id && ITEM[p.id] ? ITEM[p.id].tags : [STYLE_TAG[p.s] || 'classic']);
   // a vibe has to tie at least two kinds of clothing together, or it can't make an outfit match
   const kindsWith = t => Object.values(wardrobe).filter(l => l.some(p => tagsOf(p).includes(t))).length;
   const tags = [...new Set(Object.values(wardrobe).flat().flatMap(tagsOf))].sort(), linked = tags.filter(t => kindsWith(t) >= 2);
   const pool0 = linked.length ? linked : tags, vibe = pool0.length ? pool0[day % pool0.length] : null;
   const worn = {}, chosen = [];
-  kinds.forEach((k, ki) => { const list = wardrobe[k]; if (!list || !list.length) return;
+  kinds.forEach((k, ki) => { const all = wardrobe[k]; if (!all || !all.length) return;
+    const rainy = all.filter(p => WET_ONLY.has(p.id)), dry = all.filter(p => !WET_ONLY.has(p.id));
+    const list = wet && rainy.length ? rainy : dry.length ? dry : all;
     const score = p => (tagsOf(p).includes(vibe) ? 10 : 0) + chosen.reduce((s, q) => s + tagsOf(p).filter(t => tagsOf(q).includes(t)).length, 0);
     const best = Math.max(...list.map(score)), pool = list.filter(p => score(p) === best);
     worn[k] = pool[(day + ki) % pool.length]; chosen.push(worn[k]); });

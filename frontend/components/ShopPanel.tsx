@@ -46,6 +46,14 @@ const Plank = ({ onClick, children, disabled, wide }: { onClick: () => void; chi
     <span style={{ display: 'block', padding: '9px 16px', background: PLANK, clipPath: CP, color: LIGHT, fontSize: 15, fontWeight: 800, textShadow: `2px 2px 0 ${WOOD}`, whiteSpace: 'nowrap' }}>{children}</span>
   </button>
 );
+/** A sheet that slides up over the shelves; tapping outside it closes it. */
+const Sheet = ({ onClose, children }: { onClose: () => void; children: ReactNode }) => (
+  <div onClick={onClose} style={{ position: 'absolute', left: 0, right: 0, top: 204, bottom: 0, display: 'flex', alignItems: 'flex-end', background: 'rgba(20,12,6,0.45)' }}>
+    <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: 4, background: WOOD, clipPath: CP, animation: 'shop-pop .22s' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 12px 14px', background: WOOD_TEX, clipPath: CP }}>{children}</div>
+    </div>
+  </div>
+);
 const rope: CSSProperties = { width: 3, height: 10, background: 'repeating-linear-gradient(180deg,#7a5634 0 3px,#5e3c20 3px 6px)' };
 
 /** A pixel shopping cart with what's been picked up piled in it. */
@@ -118,11 +126,13 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
   const dept = base.body === 'girl' ? 'girls' : 'guys';
   const [view, setView] = useState<'shelves' | 'cart' | 'closet' | 'styles'>(Object.keys(start).length ? 'shelves' : 'styles');
   const [kit, setKit] = useState<string | null>(null);
+  // a style's been picked: ask whether to wear it as is or keep shopping on top of it
+  const [asking, setAsking] = useState(false);
   const [open, setOpen] = useState<Item | null>(null);
   const [ci, setCi] = useState(0);
   const [cart, setCart] = useState<Pick[]>([]);
   const [bump, setBump] = useState(0);
-  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, []);
+  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(null); setAsking(false); } }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, []);
 
   const aisleNo = AISLES.findIndex(a => a.kind === kind), aisle = AISLES[aisleNo];
   const shelf = CATALOG.filter(it => it.kind === kind && (dept !== 'guys' || it.dept !== 'girls'))
@@ -138,12 +148,16 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
 
   const openItem = (it: Item) => { setOpen(it); setCi(0); };
   const add = () => { if (!trying) return; if (!cart.some(p => p.kind === trying.kind && same(p, trying))) setCart(c => [...c, trying]); setBump(n => n + 1); setOpen(null); };
-  const checkout = () => {
-    const w: Record<string, Piece[]> = Object.fromEntries(Object.entries(closet).map(([k, v]) => [k, [...v]]));
+  const checkout = (from = closet) => {
+    const w: Record<string, Piece[]> = Object.fromEntries(Object.entries(from).map(([k, v]) => [k, [...v]]));
     cart.forEach(({ kind: k, ...p }) => { const l = (w[k] ||= []); if (!l.some(q => same(q, p)) && l.length < 12) l.push(p); });
     Object.keys(w).forEach(k => { if (!w[k].length) delete w[k]; });
     onDone({ ...base, wardrobe: w });
   };
+  const kitName = KIT_LIST.find(k => k.id === kit)?.label ?? '';
+  const wearKit = () => { if (kit) checkout(kitOf(kit, base.body)); };
+  // the style becomes the closet, then back to the aisles to add to it
+  const shopMore = () => { if (kit) setCloset(kitOf(kit, base.body)); setKit(null); setAsking(false); setView('shelves'); };
   const ownedHere = trying ? owned(trying.kind).some(p => same(p, trying)) : false;
   const inCart = trying ? cart.some(p => p.kind === trying.kind && same(p, trying)) : false;
 
@@ -167,9 +181,9 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
               </div>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
-              <button onClick={() => { setView(v => (v === 'styles' ? 'shelves' : 'styles')); setOpen(null); }} style={{ ...btn, background: view === 'styles' ? '#f2c230' : btn.background, color: view === 'styles' ? INK : LIGHT }}>styles</button>
-              <button onClick={() => { setView(v => (v === 'closet' ? 'shelves' : 'closet')); setOpen(null); }} style={{ ...btn, background: view === 'closet' ? '#f2c230' : btn.background, color: view === 'closet' ? INK : LIGHT }}>closet</button>
-              <button onClick={() => { setView(v => (v === 'cart' ? 'shelves' : 'cart')); setOpen(null); }} style={{ ...btn, background: view === 'cart' ? '#f2c230' : btn.background, color: view === 'cart' ? INK : LIGHT }}>cart {cart.length}</button>
+              <button onClick={() => { setView(v => (v === 'styles' ? 'shelves' : 'styles')); setOpen(null); setAsking(false); }} style={{ ...btn, background: view === 'styles' ? '#f2c230' : btn.background, color: view === 'styles' ? INK : LIGHT }}>styles</button>
+              <button onClick={() => { setView(v => (v === 'closet' ? 'shelves' : 'closet')); setOpen(null); setAsking(false); }} style={{ ...btn, background: view === 'closet' ? '#f2c230' : btn.background, color: view === 'closet' ? INK : LIGHT }}>closet</button>
+              <button onClick={() => { setView(v => (v === 'cart' ? 'shelves' : 'cart')); setOpen(null); setAsking(false); }} style={{ ...btn, background: view === 'cart' ? '#f2c230' : btn.background, color: view === 'cart' ? INK : LIGHT }}>cart {cart.length}</button>
               <button onClick={onClose} aria-label="leave the store" style={btn}>leave</button>
             </div>
           </div>
@@ -235,7 +249,7 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
               {KIT_LIST.map(k => {
                 const on = kit === k.id;
                 return (
-                  <button key={k.id} onClick={() => setKit(on ? null : k.id)} aria-pressed={on} style={{ padding: 3, background: WOOD, clipPath: CP }}>
+                  <button key={k.id} onClick={() => { setKit(k.id); setAsking(true); }} aria-pressed={on} style={{ padding: 3, background: WOOD, clipPath: CP }}>
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '8px 4px 6px', background: on ? '#f2c230' : CREAM, clipPath: CP }}>
                       <img src={draw(STYLE_FIT, 'happy', 'stand', { ...base, wardrobe: kitOf(k.id, base.body) })} alt="" style={{ width: 64, height: 81, imageRendering: 'pixelated' }} />
                       <span style={{ fontSize: 13, fontWeight: 800, color: INK }}>{k.label}</span>
@@ -285,30 +299,41 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
           {/* the counter: check out */}
           <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '10px 12px 12px' }}>
             {view === 'styles'
-              ? <Plank onClick={() => kit && onDone({ ...base, wardrobe: kitOf(kit, base.body) })} disabled={!kit}>wear this style</Plank>
-              : <Plank onClick={checkout} disabled={!changed}>check out{cart.length ? ` (${cart.length})` : ''}</Plank>}
+              ? <Plank onClick={() => setAsking(true)} disabled={!kit}>{kit ? `pick ${kitName}` : 'pick a style'}</Plank>
+              : <Plank onClick={() => checkout()} disabled={!changed}>{cart.length ? `check out (${cart.length})` : 'done'}</Plank>}
           </div>
 
           {/* looking at one piece: its colour cards */}
           {open && (
-            <div onClick={() => setOpen(null)} style={{ position: 'absolute', left: 0, right: 0, top: 204, bottom: 0, display: 'flex', alignItems: 'flex-end', background: 'rgba(20,12,6,0.45)' }}>
-              <div onClick={e => e.stopPropagation()} style={{ width: '100%', padding: 4, background: WOOD, clipPath: CP, animation: 'shop-pop .22s' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 12px 14px', background: WOOD_TEX, clipPath: CP }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}` }}>
-                    <div>
-                      <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>{LABEL[open.kind].toUpperCase()} · {open.tags.join(' · ').toUpperCase()}</div>
-                      <div style={{ fontSize: 20, fontWeight: 800 }}>{open.name}</div>
-                    </div>
-                    <button onClick={() => setOpen(null)} aria-label="put it back" style={{ ...btn, padding: '4px 10px' }}>×</button>
-                  </div>
-                  <ColourCards item={open} index={ci} onIndex={setCi} av={p => look(open.kind, p)} />
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }} aria-hidden>
-                    {open.colors.map((c, i) => <span key={c} style={{ width: i === ci ? 16 : 7, height: 7, background: i === ci ? '#f2c230' : 'rgba(255,241,210,0.35)', transition: 'width .2s' }} />)}
-                  </div>
-                  <Plank onClick={add} disabled={inCart || ownedHere} wide>{ownedHere ? 'already in the closet' : inCart ? 'in the cart ✓' : 'put it in the cart'}</Plank>
+            <Sheet onClose={() => setOpen(null)}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}` }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>{LABEL[open.kind].toUpperCase()} · {open.tags.join(' · ').toUpperCase()}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800 }}>{open.name}</div>
                 </div>
+                <button onClick={() => setOpen(null)} aria-label="put it back" style={{ ...btn, padding: '4px 10px' }}>×</button>
               </div>
-            </div>
+              <ColourCards item={open} index={ci} onIndex={setCi} av={p => look(open.kind, p)} />
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }} aria-hidden>
+                {open.colors.map((c, i) => <span key={c} style={{ width: i === ci ? 16 : 7, height: 7, background: i === ci ? '#f2c230' : 'rgba(255,241,210,0.35)', transition: 'width .2s' }} />)}
+              </div>
+              <Plank onClick={add} disabled={inCart || ownedHere} wide>{ownedHere ? 'already in the closet' : inCart ? 'in the cart ✓' : 'put it in the cart'}</Plank>
+            </Sheet>
+          )}
+
+          {/* a style's picked: wear it now, or go add more pieces to it */}
+          {asking && kit && (
+            <Sheet onClose={() => setAsking(false)}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, color: LIGHT, textShadow: `2px 2px 0 ${WOOD}` }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>QUICK STYLE</div>
+                  <div style={{ fontSize: 20, fontWeight: 800 }}>want any more clothes?</div>
+                </div>
+                <button onClick={() => setAsking(false)} aria-label="pick a different style" style={{ ...btn, padding: '4px 10px' }}>×</button>
+              </div>
+              <Plank onClick={shopMore} wide>yes, keep shopping</Plank>
+              <Plank onClick={wearKit} wide>no, wear it{cart.length ? ` (+${cart.length} in cart)` : ''}</Plank>
+            </Sheet>
           )}
         </div>
       </div>

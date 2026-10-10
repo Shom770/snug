@@ -73,7 +73,7 @@ def _at(series: list, t: datetime, default=None):
     return next((v for s, e, v in series if s <= t < e and v is not None), default)
 
 
-def _sky(cover: float) -> Condition:
+def sky(cover: float) -> Condition:
     # NWS sky categories: mostly clear <= 25%, partly cloudy <= 62%, mostly cloudy <= 87%, cloudy above
     return 'clear' if cover <= 25 else 'partly' if cover <= 62 else 'cloudy' if cover <= 87 else 'overcast'
 
@@ -123,7 +123,7 @@ async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
             elif kind in OBSCURED and cond is None and cov not in ('slight_chance', 'chance'):
                 cond = OBSCURED[kind]
         if cond is None:
-            cond = 'windy' if wind >= 22 else ('humid' if humidity >= 60 else 'heat') if C_TO_F(feels) >= 90 else _sky(cover)
+            cond = 'windy' if wind >= 22 else ('humid' if humidity >= 60 else 'heat') if C_TO_F(feels) >= 90 else sky(cover)
         return HourWeather(
             hour=t.hour, condition=cond, intensity=round(intensity, 2), temp=round(C_TO_F(temp), 1), feels=round(C_TO_F(feels), 1),
             humidity=humidity, wind=round(wind, 1), gust=round(gust, 1), clouds=cover, precip=round(qpf_in, 3), pop=pop,
