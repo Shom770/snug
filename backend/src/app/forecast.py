@@ -46,18 +46,19 @@ HAS_INTENSITY = {'drizzle', 'rain', 'storm', 'hail', 'sleet', 'snow', 'blizzard'
 # rain boots only for real puddles: this much rain (inches) over the next hours they're out, or heavy rain right now
 BOOTS_IN, BOOTS_HOURS = 0.2, 8
 WET = {'drizzle', 'rain', 'storm', 'hail', 'sleet'}
-# a rain jacket or umbrella only for real rain soon: in the next few hours (they're heading out now), or through the
-# day for a whole day's outfit; a proper chance of it and some actually falling (Jev says yes to them on dry days with
-# a cloud about, so this is a rule, not a question)
-RAIN_POP, RAIN_IN, RAIN_HOURS = 50, 0.02, 3
+# a rain jacket or umbrella only when it's raining now or about to (within the hour); for a whole day's outfit
+# (tomorrow's chair), rain any time they're out. Jev says yes to them on dry days with a cloud about, so this is a rule
+RAIN_POP, RAIN_IN, RAIN_HOURS = 50, 0.01, 2
 
 
 def rains(w: Weather) -> bool:
-    """Rain worth a jacket or umbrella: falling now, or likely and measurable in the next few hours (all day for a day's outfit)."""
-    hours = w.hourly[:BOOTS_HOURS if w.day else RAIN_HOURS]
-    if w.condition in WET and w.intensity >= 0.3:
+    """Rain worth a jacket or umbrella: falling now, or likely and measurable within the hour (all day for a day's outfit)."""
+    if not w.day and w.condition in WET:
         return True
-    return max(h.pop for h in hours) >= RAIN_POP and sum(h.precip for h in hours) >= RAIN_IN
+    hours = w.hourly[:BOOTS_HOURS] if w.day else w.hourly[:RAIN_HOURS]
+    if w.day:
+        return max(h.pop for h in hours) >= RAIN_POP and sum(h.precip for h in hours) >= 0.05
+    return any(h.pop >= RAIN_POP and (h.precip >= RAIN_IN or h.condition in WET) for h in hours)
 
 
 def no_rain_gear(o: Outfit, w: Weather) -> Outfit:
@@ -160,7 +161,7 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
         # no sunglasses after dark, and no umbrella when what's falling is snow
         acc=[k for k in ACCESSORIES if jev.yes(a.get(k)) and not (k == 'sunglasses' and w.night)
              and not (k == 'umbrella' and (w.condition in ('snow', 'blizzard') or not rains(w)))],
-        boots=rain_in >= BOOTS_IN or (w.condition in ('rain', 'storm') and w.intensity >= 0.55),
+        boots=rains(w) and (rain_in >= BOOTS_IN or (w.condition in ('rain', 'storm') and w.intensity >= 0.55)),
     )
     # the sun-hiding cloud, as the scene draws it
     label, band, factor = describe(jev.choice(a.get('factor'), FACTORS, 'none'), curve[0], w.hour, w.night,

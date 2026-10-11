@@ -180,7 +180,8 @@ export default function Home() {
   }, [showApp, place.lat, place.lon, place.name, user?.id, refresh]);
 
   // Phones resume a backgrounded tab instead of reloading it, so coming back in a later hour would keep showing the
-  // old hour's 12-hour curve. When the page comes back into view in a new hour, forecast again.
+  // old hour's 12-hour curve. When the page comes back into view in a new hour, forecast again; and a tab left open in
+  // view (a computer) checks each minute, so it moves on with the hour too.
   useEffect(() => {
     if (!showApp) return;
     const check = () => {
@@ -192,7 +193,9 @@ export default function Home() {
     document.addEventListener('visibilitychange', check);
     window.addEventListener('pageshow', check);
     window.addEventListener('focus', check);
+    const iv = setInterval(check, 60000);
     return () => {
+      clearInterval(iv);
       document.removeEventListener('visibilitychange', check);
       window.removeEventListener('pageshow', check);
       window.removeEventListener('focus', check);
