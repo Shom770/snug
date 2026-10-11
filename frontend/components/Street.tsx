@@ -410,7 +410,7 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
   };
   const tap = (f: Friend, x: number, y: number) => setOpen(o => (o?.id === f.id ? null : { id: f.id, x, y }));
   const bench = Math.max(3, ctx.u * 0.9);
-  // the portal: what everyone's feeling, cycling on its screen; tap it for the whole feed (and to post your own)
+  // the portal: how each friend's day is going, cycling on its screen; tap it for the feed (and to post your own)
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedOpen, setFeedOpen] = useState(false);
   const [shown, setShown] = useState(0);
@@ -418,7 +418,7 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
   useEffect(() => { if (ctx.arrived) loadFeed(); else setFeedOpen(false); }, [ctx.arrived]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const iv = setInterval(() => setShown(x => x + 1), 3600); return () => clearInterval(iv); }, []);
   const D = phone ? Math.min(ctx.pw * 0.44, 180) : Math.min(300, ctx.ph * 0.4), ps = D / 52, pcx = phone ? ctx.pw * 0.7 : ctx.pw * 0.52, pTop = ctx.ground - 2 * ctx.u - 60 * ps;
-  const now = posts.length ? posts[shown % posts.length] : null;
+  const now = list.length ? list[shown % list.length] : null; // the portal goes round today's friends, each with their day's title
   // where friends stand: either side of the portal on a computer; a row further back on a phone
   const slots = phone ? list.map((_, i) => ctx.pw * (0.22 + (0.74 * (i + 0.5)) / n))
     : list.map((_, i) => { const L = Math.max(1, Math.ceil(n / 2)), left = i < L, j = left ? i : i - L, m = left ? L : n - L;
@@ -457,7 +457,7 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
                 <span style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}><Face p={now} size={Math.round(ps * 12)} /></span>
               </span>
             )}
-            <ArcText top={now ? now.name : "what's everyone"} bottom={now ? `feeling ${now.feeling}` : 'feeling?'} size={42 * ps} />
+            <ArcText top={now ? now.name : "what's everyone"} bottom={now ? `feeling ${(now.mood ?? 'okay').toLowerCase()}` : 'feeling?'} size={42 * ps} />
           </span>
         </span>
       </button>
