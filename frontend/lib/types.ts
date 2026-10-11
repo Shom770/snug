@@ -11,6 +11,10 @@ export interface Outfit {
   acc: Array<'sunglasses' | 'umbrella' | 'beanie' | 'scarf'>;
   /** rain boots: the ground is properly wet */
   boots?: boolean;
+  /** the umbrella's closed and held at snug's side (indoors) */
+  furled?: boolean;
+  /** the umbrella partway closed, 1 open to near 0 (closing it) */
+  fold?: number;
 }
 
 export interface HourInput {

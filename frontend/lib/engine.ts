@@ -106,7 +106,10 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
   const girl=A.body==='girl',torso=girl?Tz(22,36,12,27,15,24):Tz(22,36,12,27,14,25);
   const skirt=!!skirtKind(o,A),LEG=skirtKind(o,A)==='tights'?TIGHTS:SKINS[A.skin];
   const IT=k=>itemOf(A,k),ACC=k=>accOf(A,k),RR=r=>({x0:0,x1:W-1,y0:0,y1:H-1,neck:[],collar:[],turtle:[],lapels:[],fur:[],pockets:[],armX:[-9,-9],sideX:[-9,-9],cuffY:999,waist:-9,hem:H-1,cx:19,chest:[19,28],...r});
-  if(has('umbrella')&&!sit&&!kite){g.r(28,6,1,32,'#1c1a28');P(28,38,'#1c1a28');P(27,39,'#1c1a28');P(26,39,'#1c1a28');P(25,38,'#1c1a28');}
+  if(has('umbrella')&&!sit&&!kite){if(o.furled){const FU=hasFx(IT('umbrella'),'clear')?['#e4f2fa','#b9d6ea','#f6fbfe']:IT('umbrella')?pal('umbrella'):pal('umb'),FA=ACC('umbrella')||['#ffffff','#e8e2d6','#ffffff'];
+      [[29,35],[29,34],[30,33],[31,33],[32,34],[32,35]].forEach(([x,y])=>P(x,y,'#1c1a28'));g.r(29,36,1,5,'#1c1a28'); // the hook over the hand, the shaft down
+      for(let y=41;y<=53;y++){const w=y===41||y===53?1:3;for(let i=0;i<w;i++){const x=w===1?29:28+i;P(x,y,w===1?FU[0]:[FU[2],FU[0],FU[1]][i]);}}g.r(28,47,3,1,FA[1]);P(29,54,'#1c1a28');P(29,55,'#1c1a28');}
+    else{g.r(28,6,1,32,'#1c1a28');P(28,38,'#1c1a28');P(27,39,'#1c1a28');P(26,39,'#1c1a28');P(25,38,'#1c1a28');}}
   // hair that sits behind the head
   if(A.hair==='afro'){part(E(20,10.5,11.5,10),HR);for(let i=0;i<22;i++){const x=9+((i*7)%23),y=2+((i*5)%13);if(E(20,10.5,11,9.5)(x,y))P(x,y,i%3?HR[1]:HR[2]);}}
   if(A.hair==='ponytail'){part(U(E(30.5,14,2.6,5.5),E(31,19,2,3)),HR);P(28,10,HR[2]);P(29,10,HR[2]);}
@@ -239,7 +242,9 @@ function sprite(o,mood,pose,av){const A=av?avOf(av):AV;return pix('s6'+JSON.stri
     else{for(let i=0;i<=13;i++)P(13+i,22+i,strap);const qx=24,qy=33;g.r(qx,qy,7,5,B[0]);g.r(qx,qy,7,2,B[1]);P(qx+3,qy+2,BA?BA[0]:'#d9b45a');
       if(hasFx(it,'quilt'))for(let y=qy+2;y<qy+5;y++)for(let x=qx;x<qx+7;x++)if((x+y)%3===0)P(x,y,B[1]);
       if(hasFx(it,'fur'))for(let y=qy;y<qy+5;y++)for(let x=qx;x<qx+7;x++){const v=Math.sin(x*12.9898+y*78.233)*43758.5453,f=v-Math.floor(v);if(f<0.3)P(x,y,B[2]);else if(f>0.8)P(x,y,B[1]);}}}finish(g,b0,it,pal('bag'));}
-  if(has('umbrella')&&!sit&&!kite){const UM=hasFx(IT('umbrella'),'clear')?['#e4f2fa','#b9d6ea','#f6fbfe']:IT('umbrella')?pal('umbrella'):pal('umb'),UIT=IT('umbrella'),UA=ACC('umbrella')||['#ffffff','#e8e2d6','#ffffff'];for(let y=0;y<=5;y++){const tt=(6-y)/6.2;const hw=14*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-28.5)>hw)continue;if(y===5&&(x-15)%5===0)continue;const base=y>=4?UM[1]:(x<22?UM[2]:UM[0]);P(x,y,hasFx(UIT,'dots')&&y<4&&(x+y*2)%5===0?UA[0]:hasFx(UIT,'stripes')&&y<4&&Math.floor((x-14)/4)%2?UA[0]:base);}}if(hasFx(UIT,'frogeyes')){[[24,1],[33,1]].forEach(([x,y])=>{g.r(x-1,y-1,3,2,'#ffffff');P(x,y,'#1c1a28');});}}
+  if(has('umbrella')&&!sit&&!kite){const UM=hasFx(IT('umbrella'),'clear')?['#e4f2fa','#b9d6ea','#f6fbfe']:IT('umbrella')?pal('umbrella'):pal('umb'),UIT=IT('umbrella'),UA=ACC('umbrella')||['#ffffff','#e8e2d6','#ffffff'];
+    const fold=o.fold==null?1:o.fold,FX=x=>Math.round(28.5+(x+0.5-28.5)*fold-0.5),FY=y=>Math.round(y*(1+(1-fold)*1.4));
+    if(!o.furled)for(let y=0;y<=5;y++){const tt=(6-y)/6.2;const hw=14*Math.sqrt(Math.max(0,1-tt*tt));for(let x=0;x<W;x++){if(Math.abs(x+0.5-28.5)>hw)continue;if(y===5&&(x-15)%5===0)continue;const base=y>=4?UM[1]:(x<22?UM[2]:UM[0]),c=hasFx(UIT,'dots')&&y<4&&(x+y*2)%5===0?UA[0]:hasFx(UIT,'stripes')&&y<4&&Math.floor((x-14)/4)%2?UA[0]:base;for(let yy=FY(y);yy<Math.max(FY(y)+1,y<5?FY(y+1):FY(y)+1);yy++)P(FX(x),yy,c);}}if(hasFx(UIT,'frogeyes')&&!o.furled&&fold===1){[[24,1],[33,1]].forEach(([x,y])=>{g.r(x-1,y-1,3,2,'#ffffff');P(x,y,'#1c1a28');});}}
   g.outline('#1c1a28');return g.url();});}
 function itemSprite(kind,av){const A=av?avOf({...av,allExtras:true}):AV; // a piece's own icon always shows the piece, even an extra not out today
 return pix('it2'+kind+avKey(A),()=>{const W=28,H=24,g=new Grid(W,H);

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Avatar } from './CharacterPanel';
 import { OnTop, type PageCtx } from './World';
 import type { Outfit } from '../lib/types';
@@ -101,7 +101,8 @@ function tryOn(it: MaisonPiece, today: Outfit | undefined, avatar: Avatar): stri
   else if (OUTER.includes(it.kind)) o = { ...base, outer: it.kind as Outfit['outer'] };
   else if (TOPS.includes(it.kind)) o = { ...base, top: it.kind as Outfit['top'] };
   else if (it.kind !== 'shoe' && !base.acc.includes(it.kind as Outfit['acc'][number])) o = { ...base, acc: [...base.acc, it.kind as Outfit['acc'][number]] };
-  return draw(o, 'happy', 'stand', { ...avatar, wearing: { ...((avatar as { wearing?: Record<string, string> }).wearing ?? {}), [it.kind]: it.id } } as Avatar);
+  // a puddle day keeps its rain boots on while trying things
+  return draw(o, 'happy', 'stand', { ...avatar, wet: !!base.boots, wearing: { ...((avatar as { wearing?: Record<string, string> }).wearing ?? {}), [it.kind]: it.id } } as Avatar);
 }
 
 const layout = (c: PageCtx) => {
@@ -126,6 +127,10 @@ export default function Boutique({ ctx, pieces, extras, season, avatar, today, o
   const [trying, setTrying] = useState<string | null>(null);
   const { s: k, shopW, shopX, shopY } = layout(ctx);
   const shop = useMemo(drawShop, []);
+  // the shop's picture, decoded (a cached one may already be by the time this runs)
+  const shopImg = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { if (shopImg.current?.complete && shopImg.current.naturalWidth) setLoaded(true); }, []);
   const [name, setName] = useState<string | null>(null);
   useEffect(() => { let live = true; document.fonts.ready.then(() => { if (live) setName(drawName()); }); return () => { live = false; }; }, []);
   const all = [...pieces, ...extras];
@@ -156,7 +161,9 @@ export default function Boutique({ ctx, pieces, extras, season, avatar, today, o
         @keyframes maison-twinkle{0%,100%{opacity:0;scale:.4}50%{opacity:1;scale:1}}
         @keyframes maison-sway{0%,100%{rotate:-1.2deg}50%{rotate:1.2deg}}
         @keyframes maison-drop{0%{translate:0 -40px;rotate:-10deg;opacity:0}55%{translate:0 5px;rotate:4deg;opacity:1}78%{rotate:-2deg}100%{translate:0 0;rotate:0deg}}`}</style>
-      <img src={shop} alt="" style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated' }} />
+      <img ref={shopImg} src={shop} alt="" onLoad={() => setLoaded(true)} style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated', opacity: loaded ? 1 : 0 }} />
+      {/* everything in and on the shop shows once the shop itself has (a phone draws the little clothes first otherwise) */}
+      <div style={{ position: 'absolute', inset: 0, opacity: loaded && name ? 1 : 0, transition: 'opacity .25s', pointerEvents: loaded && name ? undefined : 'none' }}>
       {name && <img src={name} alt="maison snugé" style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated', pointerEvents: 'none' }} />}
       {/* the lanterns, glowing */}
       {R.lanterns.map(([x, y], i) => <span key={i} aria-hidden style={{ position: 'absolute', ...at(x - 3, y - 2), width: 7 * k, height: 9 * k, background: 'radial-gradient(closest-side, rgba(255,226,160,0.55), rgba(255,226,160,0))', pointerEvents: 'none', animation: `maison-glow 3.6s ${i * 0.8}s ease-in-out infinite` }} />)}
@@ -213,6 +220,7 @@ export default function Boutique({ ctx, pieces, extras, season, avatar, today, o
           </div>
         </OnTop>
       )}
+      </div>
     </div>
   );
 }

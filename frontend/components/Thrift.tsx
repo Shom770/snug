@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Avatar } from './CharacterPanel';
 import { OnTop, type PageCtx } from './World';
 import type { Outfit } from '../lib/types';
@@ -104,7 +104,8 @@ function drawShop(): string {
 function tryOn(it: ThriftTop, today: Outfit | undefined, avatar: Avatar): string {
   const base: Outfit = today ?? { top: 'tee', outer: 'none', bottom: 'pants', acc: [] };
   const o: Outfit = it.kind === 'hoodie' ? { ...base, outer: 'hoodie' } : { ...base, top: it.kind as Outfit['top'] };
-  return draw(o, 'happy', 'stand', { ...avatar, wearing: { ...((avatar as { wearing?: Record<string, string> }).wearing ?? {}), [it.kind]: it.id } } as Avatar);
+  // a puddle day keeps its rain boots on while trying things
+  return draw(o, 'happy', 'stand', { ...avatar, wet: !!base.boots, wearing: { ...((avatar as { wearing?: Record<string, string> }).wearing ?? {}), [it.kind]: it.id } } as Avatar);
 }
 
 const layout = (c: PageCtx) => {
@@ -127,6 +128,10 @@ export default function Thrift({ ctx, rack, theme, nextDays, avatar, today, owne
   const [trying, setTrying] = useState<string | null>(null);
   const { s: k, shopW, shopX, shopY } = layout(ctx);
   const shop = useMemo(drawShop, []);
+  // the shop's picture, decoded (a cached one may already be by the time this runs)
+  const shopImg = useRef<HTMLImageElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { if (shopImg.current?.complete && shopImg.current.naturalWidth) setLoaded(true); }, []);
   // the lettering waits for the font, so the canvas doesn't letter it in a fallback
   const [lettering, setLettering] = useState<string | null>(null);
   useEffect(() => { let live = true; document.fonts.ready.then(() => { if (live) setLettering(drawLettering(theme)); }); return () => { live = false; }; }, [theme]);
@@ -153,7 +158,9 @@ export default function Thrift({ ctx, rack, theme, nextDays, avatar, today, owne
         @keyframes thrift-twinkle{0%,100%{opacity:1}50%{opacity:.55}}
         @keyframes thrift-swing{0%,100%{rotate:-4deg}50%{rotate:4deg}}
         @keyframes thrift-drop{0%{translate:0 -60px;rotate:-14deg;opacity:0}55%{translate:0 6px;rotate:5deg;opacity:1}78%{rotate:-2deg}100%{translate:0 0;rotate:0deg}}`}</style>
-      <img src={shop} alt="" style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated' }} />
+      <img ref={shopImg} src={shop} alt="" onLoad={() => setLoaded(true)} style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated', opacity: loaded ? 1 : 0 }} />
+      {/* everything in and on the shop shows once the shop itself has (a phone draws the little clothes first otherwise) */}
+      <div style={{ position: 'absolute', inset: 0, opacity: loaded && lettering ? 1 : 0, transition: 'opacity .25s', pointerEvents: loaded && lettering ? undefined : 'none' }}>
       {/* the name along the arch and the week's theme on its ribbon, lettered at low resolution so they're as chunky as the rest */}
       {lettering && <img src={lettering} alt="" style={{ position: 'absolute', left: shopX, top: shopY, width: shopW, height: SH * k, imageRendering: 'pixelated', pointerEvents: 'none' }} />}
       {/* the theme on the ribbon, in pixel letters (small enough that they need to be sharp to read) */}
@@ -223,6 +230,7 @@ export default function Thrift({ ctx, rack, theme, nextDays, avatar, today, owne
           </div>
         </OnTop>
       )}
+      </div>
     </div>
   );
 }

@@ -13,7 +13,7 @@ import httpx
 from . import jev
 from .descriptors import describe
 from .db import Row
-from .models import Forecast, Outfit, Weather
+from .models import Forecast, HourWeather, Outfit, Weather
 from .weather import sun_cover
 
 # 10 levels (Jev's max). The expected level 0..9 maps onto a 1-100 comfort score.
@@ -77,7 +77,27 @@ def _state(w: Weather) -> str:
         for h in w.hourly
     )
     return (f"{w.city}, {now:%a %b %-d}, {'night' if w.night else 'daytime'}. Low {round(w.lo)}°F, high {round(w.hi)}°F.\n"
-            f'hour sky temp°F feels°F humidity% wind_mph gust_mph cloud% sun_blocked% rain_chance% precip_in\n{rows}')
+            f'hour sky temp°F feels°F humidity% wind_mph gust_mph cloud% sun_blocked% rain_chance% precip_in\n{rows}\n{JUDGING}')
+
+
+# how to score comfort: decisively, as someone actually out walking in it (Jev was calling a whole day of steady rain at a
+# mild temperature "okay")
+JUDGING = ('How to judge comfort: picture actually walking around outside in it, not looking at it from a window. Be decisive and '
+           'use the whole scale. Steady rain (0.05+ in an hour) is unpleasant however mild it is: no better than "rough". Heavy rain '
+           'or thunderstorms are "bad" or worse, and rain with wind or a chill (feels under 55°F) is worse again. Liking "a sprinkle" '
+           'means a passing drizzle, not a rainy day. A dry, mild hour near what they like is "pleasant" or "perfect".')
+
+
+def _cap(h: HourWeather) -> int:
+    """The most comfortable an hour can be, whatever else: rain you're out in is never a decent hour."""
+    raw = h.condition in ('drizzle', 'rain', 'sleet', 'hail', 'storm') and (h.precip >= 0.05 or h.intensity >= 0.5)
+    if h.condition in ('storm', 'hail') and (h.precip >= 0.02 or h.intensity >= 0.4):
+        return 25
+    if raw:
+        return 28 if h.feels < 55 or h.wind >= 15 else 35
+    if h.condition == 'drizzle' or (h.condition == 'rain' and h.precip >= 0.01):
+        return 55
+    return 100
 
 
 def _history(rows: list[tuple[Row, Row]]) -> str:
@@ -144,7 +164,7 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     model, a = await jev.decide(client, _state(w) + _tuning(tuning, len(history or [])) + tuned + _history(history or []), qs)
 
     top = len(COMFORT) - 1
-    curve = [max(1, min(100, round(1 + jev.score(a[f'h{i}']) / top * 99))) for i in range(len(w.hourly))]
+    curve = [max(1, min(100, _cap(h), round(1 + jev.score(a[f'h{i}']) / top * 99))) for i, h in enumerate(w.hourly)]
     curve += [curve[-1]] * (12 - len(curve))
     _, top_, layer = WARMTH[max(0, min(len(WARMTH) - 1, round(jev.score(a['warmth']))))]
     if jev.yes(a.get('rain')) and layer != 'coat' and rains(w):

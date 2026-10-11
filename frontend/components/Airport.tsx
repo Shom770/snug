@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { Avatar } from './CharacterPanel';
 import type { Place } from './LocationSearch';
 import { api } from './auth';
@@ -311,6 +312,7 @@ function drawHall(pw: number, ph: number, floorY: number, px: number, frames = f
 const rr = (n: number) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const pick = <T,>(a: T[], n: number) => a[Math.floor(rr(n) * a.length) % a.length];
 const look = sprite as (o: Outfit, mood: string, pose: string, av: unknown) => string;
+const standUp = sprite as (o: Outfit, mood: string, pose: string) => string;
 const BAG_COLORS = ['#e7a93b', '#d9534f', '#5b8def', '#6cc28b', '#c98bdb', '#3a3f4a', '#f08aa5'];
 function traveller(seed: number) {
   const body = rr(seed) < 0.5 ? 'girl' : 'boy', style = pick(Object.keys(STYLES), seed + 1), col = (k: number) => pick(Object.keys(COLORS), seed + k);
@@ -500,7 +502,7 @@ export const airportSnugAt = (c: PageCtx) => Math.round(layout(c).snugX);
  * the places flipping round on it), pick the days you'll be there, and it prints your boarding pass; then snug's
  * suitcase goes through the x-ray, packed with what it'll wear there, day by day, from its own closet.
  */
-export default function Airport({ ctx, avatar, home, units }: { ctx: PageCtx; avatar: Avatar; home: Place; units?: '°F' | '°C' }) {
+export default function Airport({ ctx, avatar, home, units, outfit }: { ctx: PageCtx; avatar: Avatar; home: Place; units?: '°F' | '°C'; outfit?: Outfit }) {
   const L = layout(ctx), { s, flip } = L;
   const pad = L.phone ? 10 : 14, tw = Math.floor((L.boardW - 2 * pad - 4 - (N - 1) * 2) / (N + 1.3)), th = Math.round(tw * 1.3);
   const [q, setQ] = useState('');
@@ -515,11 +517,29 @@ export default function Airport({ ctx, avatar, home, units }: { ctx: PageCtx; av
   // pick: choosing where; dates; print: the pass coming out; scan: the bag in the x-ray; done
   const [phase, setPhase] = useState<'pick' | 'dates' | 'want' | 'print' | 'in' | 'scan' | 'out' | 'done'>('pick');
   const [shownTag, setShownTag] = useState(true);
+  // in out of the rain: snug folds the umbrella down, a few flaps of the canopy, and carries it closed at its side
+  useEffect(() => {
+    if (!ctx.arrived || !outfit?.acc.includes('umbrella')) return;
+    const frames = [...[0.62, 0.3, 0.08].map(fold => standUp({ ...outfit, fold }, 'happy', 'stand')), standUp({ ...outfit, furled: true }, 'happy', 'stand')];
+    const ts = frames.map((src, k) => setTimeout(() => ctx.setSnug(src), 180 + k * 130));
+    return () => { ts.forEach(clearTimeout); ctx.setSnug(null); };
+  }, [ctx.arrived, outfit]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the floor carries on below the scene: a phone's screen can be taller than it once the browser's bar tucks away, and
+  // the meadow down there would show under the terminal
+  const [below, setBelow] = useState(0);
+  useEffect(() => {
+    if (!ctx.arrived) { setBelow(0); return; }
+    const measure = () => { const hero = document.querySelector('[data-rv="av"]')?.parentElement; if (hero) setBelow(Math.max(0, Math.ceil(window.innerHeight - hero.getBoundingClientRect().bottom))); };
+    measure();
+    window.addEventListener('resize', measure); window.visualViewport?.addEventListener('resize', measure);
+    return () => { window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
+  }, [ctx.arrived]);
   // nothing to scroll down to from here: the page stays put while snug's at the airport
   useEffect(() => {
     if (!ctx.arrived) return;
     const h = document.documentElement, b = document.body, was = [h.style.overflow, b.style.overflow];
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // straight to the top before locking (a smooth scroll gets stopped partway by the lock, stranding the board off screen)
+    window.scrollTo(0, 0);
     h.style.overflow = 'hidden'; b.style.overflow = 'hidden';
     const stay = (e: TouchEvent) => { if (!(e.target as Element)?.closest?.('input')) e.preventDefault(); };
     document.addEventListener('touchmove', stay, { passive: false });
@@ -630,7 +650,8 @@ export default function Airport({ ctx, avatar, home, units }: { ctx: PageCtx; av
   const seat = dest && range ? `${4 + (hash(range[0] + dest.name) % 28)}${'ACDF'[hash(range[1]) % 4]}` : '';
 
   return (
-    <div data-airport style={{ position: 'absolute', inset: 0, fontFamily: FONT, overflow: 'hidden' }}>
+    <div data-airport style={{ position: 'absolute', left: -4, top: 0, right: 0, bottom: 0, fontFamily: FONT, overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: 4, top: 0, right: 0, bottom: 0 }}>
       <style>{`@keyframes flap-in{from{transform:scaleY(.15);filter:brightness(.6)}to{transform:none}}
         @keyframes air-blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
         @keyframes air-print{from{translate:0 -100%}to{translate:0 0}}
@@ -892,6 +913,12 @@ export default function Airport({ ctx, avatar, home, units }: { ctx: PageCtx; av
             </div>
           </div>
         </OnTop>
+      )}
+      </div>
+      {below > 0 && createPortal(
+        <div aria-hidden style={{ position: 'fixed', left: 0, right: 0, bottom: 0, height: below, zIndex: 40, pointerEvents: 'none', imageRendering: 'pixelated',
+          background: `repeating-linear-gradient(90deg, #c4beb3 0 ${px}px, transparent ${px}px ${10 * px}px), repeating-linear-gradient(0deg, #c4beb3 0 ${px}px, transparent ${px}px ${5 * px}px), #d6d2c9` }} />,
+        document.body,
       )}
     </div>
   );
