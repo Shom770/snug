@@ -54,7 +54,7 @@ export default function SignOutTag({ user, onSignOut, onAdjust }: { user: User; 
   if (!board?.parentElement || !pos || !landed) return null;
   const signOut = <Hang label="sign out" title={`signed in as ${user.email}`} onClick={onSignOut} ropeW={54} />;
   return createPortal(
-    <div style={{ position: 'absolute', right: pos.right, top: pos.top, transform: 'translateX(50%)', zIndex: 2, perspective: 500, pointerEvents: 'none', fontFamily: "'Rethink Sans',sans-serif" }}>
+    <div data-pin style={{ position: 'absolute', right: pos.right, top: pos.top, transform: 'translateX(50%)', zIndex: 2, perspective: 500, pointerEvents: 'none', fontFamily: "'Rethink Sans',sans-serif" }}>
       {/* folded up behind the board, it flips down over the bottom edge, overshoots, and swings to rest */}
       <style>{`@keyframes snug-flip{
         0%{transform:rotateX(-180deg);opacity:0} 8%{opacity:1}

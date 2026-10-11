@@ -451,7 +451,7 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
       <button onClick={() => { setFeedOpen(true); setOpen(null); }} aria-label="the portal: see what friends are up to" style={{ position: 'absolute', left: pcx - 26 * ps, top: pTop, width: 52 * ps, height: 60 * ps, cursor: 'pointer' }}>
         <Portal size={ps} />
         <span style={{ position: 'absolute', left: 5 * ps, top: 5 * ps, width: 42 * ps, height: 42 * ps, borderRadius: '50%', overflow: 'hidden' }}>
-          <span key={shown} style={{ position: 'absolute', inset: 0, animation: 'st-pop .4s cubic-bezier(.3,1.4,.5,1) both' }}>
+          <span key={list.length > 1 ? shown : 0} style={{ position: 'absolute', inset: 0, animation: 'st-pop .4s cubic-bezier(.3,1.4,.5,1) both' }}>
             {now && (
               <span style={{ position: 'absolute', left: '50%', top: '50%', translate: '-50% -50%', padding: Math.max(3, ps * 1.4), borderRadius: '50%', background: 'rgba(159,242,224,0.14)', boxShadow: `0 0 0 ${Math.max(2, ps * 0.5)}px rgba(159,242,224,0.35)` }}>
                 <span style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}><Face p={now} size={Math.round(ps * 12)} /></span>

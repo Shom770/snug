@@ -335,7 +335,7 @@ export default function Home() {
           { key: 'boutique', label: 'boutique', snugAt: boutiqueSnugAt, render: c => (
             <Boutique ctx={c} pieces={thrift.maison.pieces} extras={thrift.maison.extras} season={thrift.season} avatar={(prefs?.avatar ?? {}) as Avatar} today={weather?.outfit} owned={owned} onTake={takeHome} />
           ) },
-          { key: 'airport', label: 'airport', snugAt: airportSnugAt, render: c => <Airport ctx={c} avatar={(prefs?.avatar ?? {}) as Avatar} home={place} units={prefs?.units} outfit={weather?.outfit} /> },
+          { key: 'airport', label: 'airport', snugAt: airportSnugAt, crowded: c => c.pw < 760, render: c => <Airport ctx={c} avatar={(prefs?.avatar ?? {}) as Avatar} home={place} units={prefs?.units} outfit={weather?.outfit} /> },
         ]} />
       )}
       {homeward && <Fade onMid={() => setJump({ page: 0, key: Date.now() })} onDone={() => setHomeward(false)} />}

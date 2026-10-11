@@ -20,7 +20,10 @@ export interface PageCtx {
 /** Snug's own street (the first screen), for things living on it: where the ground is, and whether snug's home. */
 export interface HomeCtx { u: number; pw: number; ph: number; head: number; ground: number; avLeft: number; here: boolean }
 /** A place further along the world: what its arrow says, where snug stands there (its sprite's left edge), and what's there. */
-export interface WorldPage { key: string; label: string; snugAt: (c: PageCtx) => number; render: (c: PageCtx) => ReactNode }
+export interface WorldPage {
+  key: string; label: string; snugAt: (c: PageCtx) => number; render: (c: PageCtx) => ReactNode;
+  crowded?: (c: PageCtx) => boolean; // no room up top: the snug board (and sign out) walks off with home instead of staying put
+}
 
 const WALK = 1.1;
 
@@ -120,10 +123,12 @@ export default function World({ pages, today, ready, driveFrom, onDrive, jump, o
     if (!hero || !av || !box) return;
     const sh = hero.querySelector<HTMLElement>('[data-rv="sh"]');
     const tr = instant.current ? 'none' : `translate ${WALK}s cubic-bezier(.45,0,.3,1)`;
+    const pin = !page || !pages[page - 1]?.crowded?.(ctxFor(page)!);
     [...hero.children].forEach(el => {
       const e = el as HTMLElement;
       e.style.transition = tr;
       if (e === av || e === sh) { e.style.zIndex = '3'; e.style.translate = page ? `${target - box.avLeft}px 0` : '0 0'; }
+      else if (pin && (e.dataset.rv === 'board' || e.hasAttribute('data-pin'))) e.style.translate = '0 0'; // the snug board and sign out stay put, like the place picker
       else e.style.translate = `${-page * box.pw}px 0`;
     });
     if (page === shown.current) { instant.current = false; return; } // just keeping up with the layout, no walk
