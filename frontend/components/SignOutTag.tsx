@@ -40,6 +40,17 @@ export default function SignOutTag({ user, onSignOut, onAdjust }: { user: User; 
     mo.observe(board, { attributes: true, attributeFilter: ['style'] });
     return () => { clearTimeout(t); mo.disconnect(); };
   }, [board]);
+  // the world pans the board between pages (or leaves it put); the planks copy however it's been moved, so they never
+  // hang off nothing
+  const [shift, setShift] = useState({ translate: '', transition: '' });
+  useEffect(() => {
+    if (!board) return;
+    const sync = () => setShift(s => (s.translate === board.style.translate && s.transition === board.style.transition ? s : { translate: board.style.translate, transition: board.style.transition }));
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(board, { attributes: true, attributeFilter: ['style'] });
+    return () => mo.disconnect();
+  }, [board]);
   useEffect(() => {
     if (!board?.parentElement) return;
     const parent = board.parentElement;
@@ -54,7 +65,7 @@ export default function SignOutTag({ user, onSignOut, onAdjust }: { user: User; 
   if (!board?.parentElement || !pos || !landed) return null;
   const signOut = <Hang label="sign out" title={`signed in as ${user.email}`} onClick={onSignOut} ropeW={54} />;
   return createPortal(
-    <div data-pin style={{ position: 'absolute', right: pos.right, top: pos.top, transform: 'translateX(50%)', zIndex: 2, perspective: 500, pointerEvents: 'none', fontFamily: "'Rethink Sans',sans-serif" }}>
+    <div data-follow style={{ position: 'absolute', right: pos.right, top: pos.top, transform: 'translateX(50%)', translate: shift.translate, transition: shift.transition, zIndex: 2, perspective: 500, pointerEvents: 'none', fontFamily: "'Rethink Sans',sans-serif" }}>
       {/* folded up behind the board, it flips down over the bottom edge, overshoots, and swings to rest */}
       <style>{`@keyframes snug-flip{
         0%{transform:rotateX(-180deg);opacity:0} 8%{opacity:1}

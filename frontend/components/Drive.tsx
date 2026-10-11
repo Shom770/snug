@@ -291,63 +291,205 @@ const GFONT = "'Rethink Sans', sans-serif";
 function drawIcon(g: G, name: keyof typeof ICONS, x: number, y: number) {
   ICONS[name].forEach((r, yy) => [...r].forEach((c, xx) => { if (c !== ' ') box(g, x + xx, y + yy, 1, 1, c === '#' ? INK : ICON_COLOUR[name]); }));
 }
-const minutes = (dest: Dest, from: number) => Math.max(2, Math.abs(dest.page - from) * 3 + 1);
-/** The route from here to there on a grid of city blocks: right-angled, street by street, ending top right. */
-function routeOf(W: number, H: number, seed: number): Pt[] {
-  const B = 17, cols = Math.floor((W - 6) / B), rows = Math.floor((H - 20) / B), X = (i: number) => 4 + i * B + 1, Y = (j: number) => 3 + j * B + 1;
-  const pts: Pt[] = [[X(1), Y(rows)]];
-  let i = 1, j = rows;
-  for (let n = 0; i < cols - 1 || j > 1; n++) {
-    const up = (n + seed) % 2 === 0 && j > 1, steps = 1 + ((seed + n) % 2);
-    if (up || i >= cols - 1) j = Math.max(1, j - steps); else i = Math.min(cols - 1, i + steps);
-    pts.push([X(i), Y(j)]);
-    if (n > 20) break;
-  }
-  return pts;
+// ---------- snug city, the GPS's map ----------
+//
+// A small city on a river: downtown's grid of uneven blocks with Broad and Market (the two big streets) meeting at city
+// hall's circle, a parkway cutting across it on the diagonal, the big park up top, a little square, home in the
+// rowhouses to the south, the strip mall out along the pike, and past the cloverleaf on the expressway, the airport.
+// Routes are worked out on its roads, nudged a little differently every drive, so it's not the same way every time.
+
+const MW = 240, MH = 146; // the whole city, in the GPS's pixels
+const AVES = [22, 38, 52, 68, 86, 100, 116, 132], STS = [12, 26, 38, 52, 66, 78, 92, 106, 120, 134]; // its streets, unevenly apart
+const BROAD = 68, MARKET = 66;
+const PARK = { x0: 86, y0: 12, x1: 116, y1: 52 }; // the big park
+const SQUARE = { x0: 38, y0: 52, x1: 52, y1: 66 }; // the little square, a block of trees with paths across
+const ROWS = { x0: 22, y0: 92, x1: 68, y1: 134 }; // the rowhouses round home
+const PIKE = 150; // the strip mall's road
+const EXPY: Pt[] = [[0, 4], [22, 4], [68, 4], [132, 4], [176, 4], [188, 8], [195, 18], [196, 30], [196, MARKET], [196, 90], [196, MH]];
+// where each place on the GPS's list is
+const SPOTS: Record<keyof typeof ICONS, Pt> = { home: [45, 120], chair: [22, 99], park: [100, 52], thrift: [PIKE, 60], boutique: [PIKE, 86], plane: [212, 116] };
+type Road = 'st' | 'main' | 'hw' | 'ramp';
+const PACE: Record<Road, number> = { st: 1, main: 0.8, hw: 0.42, ramp: 0.9 }; // how slow each kind of road is
+
+interface City { pts: Pt[]; adj: { to: number; cost: number; id: number }[][]; at: Map<string, number> }
+let city: City | null = null;
+function cityGraph(): City {
+  if (city) return city;
+  const pts: Pt[] = [], adj: City['adj'] = [], at = new Map<string, number>();
+  let ids = 0;
+  const node = ([x, y]: Pt) => { const k = `${x},${y}`; if (!at.has(k)) { at.set(k, pts.length); pts.push([x, y]); adj.push([]); } return at.get(k)!; };
+  const road = (a: Pt, b: Pt, kind: Road) => {
+    const i = node(a), j = node(b), cost = Math.hypot(a[0] - b[0], a[1] - b[1]) * PACE[kind], id = ids++;
+    adj[i].push({ to: j, cost, id }); adj[j].push({ to: i, cost, id });
+  };
+  const inPark = (x: number, y: number) => x > PARK.x0 && x < PARK.x1 && y > PARK.y0 && y < PARK.y1;
+  AVES.forEach(x => STS.slice(1).forEach((y, k) => { if (!inPark(x, (y + STS[k]) / 2)) road([x, STS[k]], [x, y], x === BROAD ? 'main' : 'st'); }));
+  STS.forEach(y => AVES.slice(1).forEach((x, k) => { if (!inPark((x + AVES[k]) / 2, y)) road([AVES[k], y], [x, y], y === MARKET ? 'main' : 'st'); }));
+  road([BROAD, MARKET], [22, 26], 'main'); // the parkway, out to the river
+  // out east: three streets run on to the pike, and Market on past the strip mall to the expressway
+  [38, MARKET, 92].forEach(y => road([132, y], [PIKE, y], y === MARKET ? 'main' : 'st'));
+  [38, 52, MARKET, 78, 92, 106].slice(1).forEach((y, k) => road([PIKE, [38, 52, MARKET, 78, 92, 106][k]], [PIKE, y], 'main'));
+  road([PIKE, MARKET], [196, MARKET], 'main');
+  // the expressway, along the top and down to the airport, with on-ramps from the avenues
+  EXPY.slice(1, 10).forEach((p, k) => road(EXPY[k], p, 'hw'));
+  [22, 68, 132].forEach(x => road([x, 4], [x, 12], 'ramp'));
+  road([196, 90], [204, 100], 'ramp'); road([204, 100], SPOTS.plane, 'ramp');
+  // the places themselves, each on its street
+  road([38, 120], SPOTS.home, 'st'); road(SPOTS.home, [52, 120], 'st');
+  road([22, 92], SPOTS.chair, 'st'); road(SPOTS.chair, [22, 106], 'st');
+  road([PIKE, 52], SPOTS.thrift, 'main'); road(SPOTS.thrift, [PIKE, MARKET], 'main');
+  road([PIKE, 78], SPOTS.boutique, 'main'); road(SPOTS.boutique, [PIKE, 92], 'main');
+  return (city = { pts, adj, at });
 }
-/** The GPS screen. Picking: "where to?" and the places. Driving: the city map, the route, the car moving along it. */
-function drawGps(g: G, W: number, H: number, dests: Dest[], from: number, dest: Dest | null, p: number) {
+/** The way from one place to another on the city's roads. With a seed, every road's a little quicker or slower than
+ * usual (traffic, lights), so each drive can go its own way. */
+function routeBetween(from: keyof typeof ICONS, to: keyof typeof ICONS, seed: number | null): { pts: Pt[]; cost: number } {
+  const c = cityGraph(), a = c.at.get(SPOTS[from].join(','))!, b = c.at.get(SPOTS[to].join(','))!;
+  const dist = c.pts.map(() => Infinity), prev = c.pts.map(() => -1), done = c.pts.map(() => false);
+  dist[a] = 0;
+  for (;;) {
+    let u = -1;
+    dist.forEach((d, i) => { if (!done[i] && d < Infinity && (u < 0 || d < dist[u])) u = i; });
+    if (u < 0 || u === b) break;
+    done[u] = true;
+    c.adj[u].forEach(e => { const w = e.cost * (seed === null ? 1 : 0.65 + 0.8 * rnd(seed * 13.7 + e.id * 1.31)); if (dist[u] + w < dist[e.to]) { dist[e.to] = dist[u] + w; prev[e.to] = u; } });
+  }
+  const path: Pt[] = [];
+  for (let v = b; v >= 0; v = prev[v]) path.unshift(c.pts[v]);
+  let cost = 0;
+  path.slice(1).forEach((q, i) => { cost += Math.hypot(q[0] - path[i][0], q[1] - path[i][1]); });
+  return { pts: path, cost };
+}
+const minutesTo = (from: keyof typeof ICONS, to: keyof typeof ICONS) => Math.max(2, Math.round(routeBetween(from, to, null).cost / 16));
+
+/** The city itself, drawn once: river, blocks and buildings, the park, the rowhouses, the strip mall, the airport, and
+ * the roads over it all. */
+let cityMap: HTMLCanvasElement | null = null;
+function drawCity(): HTMLCanvasElement {
+  if (cityMap) return cityMap;
+  const cv = document.createElement('canvas'); cv.width = MW; cv.height = MH;
+  const g = cv.getContext('2d')!;
+  box(g, 0, 0, MW, MH, '#ece5d2');
+  // the river down the west side, a little bendy, with ripples
+  for (let y = 0; y < MH; y++) { const c = 7 + 3 * Math.sin(y / 17) + 1.5 * Math.sin(y / 7); box(g, 0, y, c + 5, 1, '#9cc8e8'); box(g, c + 5, y, 1, 1, '#c9dfe9'); }
+  for (let k = 0; k < 14; k++) box(g, 2 + rnd(k) * 6, 4 + k * 10, 3, 1, '#c1dcef');
+  // downtown's blocks, each with a few buildings in it
+  const BLDG = ['#d9cdb0', '#d2c4a6', '#ddd2b9', '#cfc0a0'];
+  AVES.slice(1).forEach((x1, i) => STS.slice(1).forEach((y1, j) => {
+    const x0 = AVES[i], y0 = STS[j];
+    box(g, x0, y0, x1 - x0, y1 - y0, '#e4dbc4');
+    if (x0 >= ROWS.x0 && x1 <= ROWS.x1 && y0 >= ROWS.y0 && y1 <= ROWS.y1) {
+      // rowhouses: two rows of little roofs back to back, gardens down the middle
+      for (let x = x0 + 2; x < x1 - 2; x += 2) { box(g, x, y0 + 2, 1, 3, rnd(x + y0) > 0.5 ? '#d9b796' : '#cfa889'); box(g, x, y1 - 5, 1, 3, rnd(x * 3 + y1) > 0.5 ? '#d9b796' : '#cfa889'); }
+      box(g, x0 + 2, y0 + 6, x1 - x0 - 4, y1 - y0 - 12, '#d6e2bf');
+      return;
+    }
+    const n = 2 + Math.floor(rnd(i * 7 + j * 3) * 3), w = x1 - x0 - 4;
+    for (let k = 0, x = x0 + 2; k < n; k++) {
+      const bw = k === n - 1 ? x0 + 2 + w - x : Math.max(2, Math.round(w / n + (rnd(i + j * 5 + k) - 0.5) * 3));
+      const tall = rnd(i * 11 + j + k * 2) > 0.7;
+      box(g, x, y0 + 2, bw - 1, y1 - y0 - 4, tall && x0 >= 52 && x1 <= 132 && y1 <= 92 ? '#c7b796' : BLDG[(i + j + k) % 4]);
+      x += bw;
+    }
+  }));
+  // the little square: grass, two paths crossing, a fountain in the middle
+  box(g, SQUARE.x0, SQUARE.y0, SQUARE.x1 - SQUARE.x0, SQUARE.y1 - SQUARE.y0, '#b9d7a0');
+  for (let t = 0; t <= 1; t += 0.05) { box(g, SQUARE.x0 + 1 + t * 12, SQUARE.y0 + 1 + t * 12, 1, 1, '#efe8d5'); box(g, SQUARE.x1 - 2 - t * 12, SQUARE.y0 + 1 + t * 12, 1, 1, '#efe8d5'); }
+  disc(g, 45, 59, 2, '#efe8d5'); box(g, 44, 58, 2, 2, '#8fc0e2');
+  [[40, 54], [49, 55], [40, 63], [50, 63]].forEach(([x, y]) => box(g, x, y, 2, 2, '#7fae68'));
+  // the big park: lawns, a lake, a ring of trees, paths wandering through
+  box(g, PARK.x0, PARK.y0, PARK.x1 - PARK.x0, PARK.y1 - PARK.y0, '#b4d49a');
+  box(g, PARK.x0 + 6, PARK.y0 + 22, 12, 9, '#c4dfaa');
+  for (let x = PARK.x0 + 1; x < PARK.x1 - 1; x += 3) { box(g, x, PARK.y0 + 1, 2, 2, '#86b66f'); box(g, x + 1, PARK.y1 - 3, 2, 2, '#86b66f'); }
+  for (let y = PARK.y0 + 4; y < PARK.y1 - 3; y += 3) { box(g, PARK.x0 + 1, y, 2, 2, '#86b66f'); box(g, PARK.x1 - 3, y + 1, 2, 2, '#86b66f'); }
+  for (let k = 0; k < 16; k++) box(g, PARK.x0 + 5 + rnd(k * 3.3) * 20, PARK.y0 + 5 + rnd(k * 7.1) * 30, 2, 2, '#8fbe77');
+  for (let y = PARK.y0 + 2; y < PARK.y1 - 1; y++) box(g, 100 + Math.round(4 * Math.sin(y / 5)), y, 1, 1, '#efe8d5');
+  for (let x = PARK.x0 + 2; x < PARK.x1 - 1; x++) box(g, x, 38 + Math.round(2 * Math.sin(x / 4)), 1, 1, '#efe8d5');
+  for (let a = 0; a < 6.3; a += 0.05) { const x = 104 + 7 * Math.cos(a), y = 22 + 4 * Math.sin(a); box(g, x, y, 1, 1, '#9cc8e8'); }
+  disc(g, 104, 22, 4, '#9cc8e8'); box(g, 101, 20, 6, 4, '#9cc8e8'); box(g, 102, 21, 2, 1, '#c1dcef');
+  // out east: lawns along the pike, then the strip mall: its lot, its long low building, a storefront for each shop
+  box(g, AVES[AVES.length - 1] + 1, 10, PIKE - AVES[AVES.length - 1] - 2, MH - 10, '#e3e3cf');
+  box(g, PIKE + 3, 50, 22, 46, '#d3d2cb');
+  for (let y = 53; y < 94; y += 4) for (let x = PIKE + 5; x < PIKE + 24; x += 3) box(g, x, y, 1, 2, '#f6f4ee');
+  box(g, PIKE + 25, 49, 11, 48, '#a88f6c'); box(g, PIKE + 26, 50, 9, 46, '#e3cba3');
+  [['#7fb07a', 56], ['#e0a35a', 64], ['#c46a5a', 72], ['#6d8fb5', 78], ['#3f6b58', 84], ['#d9c46a', 91]].forEach(([c, y]) => box(g, PIKE + 25, y as number, 2, 5, c as string));
+  for (let y = 12; y < MH; y += 7) box(g, PIKE + 40, y, 2, 2, '#9cbf86');
+  // the airport, past the expressway: grass, two runways, the terminal and its planes
+  box(g, 200, 96, MW - 200, MH - 96, '#dde6c8');
+  box(g, 206, 128, MW - 206, 6, '#8e949c'); for (let x = 209; x < MW - 2; x += 5) box(g, x, 130, 3, 1, '#f4f4f4');
+  line(g, 214, 144, MW - 2, 106, 4, '#8e949c'); for (let t = 0.1; t < 0.95; t += 0.12) box(g, 214 + (MW - 216) * t, 144 - 38 * t, 1, 1, '#f4f4f4');
+  box(g, 216, 110, 22, 10, '#c4c8cc');
+  box(g, 219, 101, 19, 8, INK); box(g, 220, 102, 17, 6, '#d7dce2'); for (let x = 221; x < 236; x += 3) box(g, x, 103, 2, 2, '#9cc1ff');
+  [[220, 113], [229, 114]].forEach(([x, y]) => { box(g, x, y, 5, 1, '#ffffff'); box(g, x + 2, y - 1, 1, 3, '#ffffff'); });
+  // roads: a casing first, then the road on top (the expressway orange, the big streets yellow, the rest white)
+  const casing = (pts: Pt[], w: number, c: string) => pts.slice(1).forEach((p, k) => line(g, pts[k][0], pts[k][1], p[0], p[1], w, c));
+  const all: { pts: Pt[]; kind: Road }[] = [];
+  // (the streets that would cross the park stop at its edge)
+  AVES.forEach(x => all.push({ pts: [[x, [22, BROAD, 132].includes(x) ? 4 : x > PARK.x0 && x < PARK.x1 ? PARK.y1 : 12], [x, 134]], kind: x === BROAD ? 'main' : 'st' }));
+  STS.forEach(y => {
+    const x0 = y === MARKET ? 0 : 22, x1 = y === MARKET ? MW : [38, 92].includes(y) ? PIKE : 132, kind: Road = y === MARKET ? 'main' : 'st';
+    if (y > PARK.y0 && y < PARK.y1) all.push({ pts: [[x0, y], [PARK.x0, y]], kind }, { pts: [[PARK.x1, y], [x1, y]], kind });
+    else all.push({ pts: [[x0, y], [x1, y]], kind });
+  });
+  all.push({ pts: [[BROAD, MARKET], [22, 26]], kind: 'main' }, { pts: [[PIKE, 10], [PIKE, MH]], kind: 'main' });
+  const drawn = (kind: Road, w: number, c: string) => all.filter(r => r.kind === kind).forEach(r => casing(r.pts, w, c));
+  drawn('st', 4, '#d5cbb3'); drawn('main', 5, '#d1b46a');
+  drawn('st', 2, '#ffffff'); drawn('main', 3, '#fbe3a0');
+  // city hall: a circle where Broad meets Market, the hall in the middle
+  disc(g, BROAD, MARKET, 5, '#d1b46a'); disc(g, BROAD, MARKET, 4, '#fbe3a0'); box(g, BROAD - 2, MARKET - 2, 4, 4, '#b39d76'); box(g, BROAD - 1, MARKET - 1, 2, 2, '#e8dcc2');
+  // the cloverleaf where Market crosses the expressway: four loops
+  [[-6, -6], [6, -6], [-6, 6], [6, 6]].forEach(([dx, dy]) => { disc(g, 196 + dx, MARKET + dy, 5, '#d39a3e'); disc(g, 196 + dx, MARKET + dy, 4, '#f6c879'); disc(g, 196 + dx, MARKET + dy, 2, '#ece5d2'); });
+  [[22, 4], [68, 4], [132, 4]].forEach(([x, y]) => { line(g, x, y, x, y + 8, 3, '#f6c879'); });
+  line(g, 196, 90, 204, 100, 3, '#f6c879'); line(g, 204, 100, SPOTS.plane[0], SPOTS.plane[1], 3, '#f6c879');
+  casing(EXPY, 6, '#c9852a'); casing(EXPY, 4, '#f4b350'); casing(EXPY, 1, '#fbd38a');
+  box(g, 0, MARKET - 1, 12, 3, '#fbe3a0'); // Market's bridge over the river
+  return (cityMap = cv);
+}
+
+/** The GPS screen. Picking: "where to?" and the places. Driving: the city, the route, the car moving along it. */
+function drawGps(g: G, W: number, H: number, picks: Dest[], from: keyof typeof ICONS, dest: Dest | null, route: Pt[] | null, p: number, mins: number) {
   box(g, 0, 0, W, H, INK);
   box(g, 2, 2, W - 4, H - 4, '#f3eedf');
   g.textBaseline = 'alphabetic';
-  if (!dest) {
+  if (!dest || !route) {
     for (let x = 2; x < W - 2; x += 8) box(g, x, 2, 1, H - 4, '#ebe4d0');
     for (let y = 2; y < H - 2; y += 8) box(g, 2, y, W - 4, 1, '#ebe4d0');
     g.fillStyle = INK; g.font = `800 11px ${GFONT}`; g.textAlign = 'left'; g.fillText('where to?', 7, 15);
     g.fillStyle = 'rgba(22,20,31,0.6)'; g.font = `700 8px ${GFONT}`; g.textAlign = 'right'; g.fillText('stay here', W - 7, 14); box(g, W - 7 - g.measureText('stay here').width, 15, g.measureText('stay here').width, 1, 'rgba(22,20,31,0.5)');
-    dests.filter(d => d.page !== from).forEach((d, k) => {
+    picks.forEach((d, k) => {
       const y = 21 + k * 20, w = W - 12;
       box(g, 6, y, w, 18, INK); box(g, 7, y + 1, w - 2, 15, '#fffaf0'); box(g, 7, y + 16, w - 2, 1, '#e4dcc6');
       drawIcon(g, d.icon, 10, y + 5);
       g.fillStyle = INK; g.font = `800 10px ${GFONT}`; g.textAlign = 'left'; g.fillText(d.label, 23, y + 12.5);
-      g.fillStyle = 'rgba(22,20,31,0.55)'; g.font = `700 8px ${GFONT}`; g.textAlign = 'right'; g.fillText(`${minutes(d, from)} min`, W - 10, y + 12.5);
+      g.fillStyle = 'rgba(22,20,31,0.55)'; g.font = `700 8px ${GFONT}`; g.textAlign = 'right'; g.fillText(`${minutesTo(from, d.icon)} min`, W - 10, y + 12.5);
     });
     return;
   }
-  // the map: blocks between white streets, a park, the river in a corner
-  const B = 17;
-  box(g, 2, 2, W - 4, H - 4, '#ffffff');
-  for (let bx = 4; bx < W - 2; bx += B) for (let by = 3; by < H - 16; by += B) {
-    const k = Math.floor(bx / B) * 7 + Math.floor(by / B) * 3, park = k % 11 === 4, water = bx < 30 && by < 30;
-    box(g, bx + 3, by + 3, B - 3, B - 3, water ? '#9cc8e8' : park ? '#bfd9a8' : k % 3 ? '#e9e1cc' : '#e2d8bf');
-    if (park) { box(g, bx + 6, by + 6, 2, 2, '#7fb07a'); box(g, bx + 11, by + 9, 2, 2, '#7fb07a'); }
-    else if (!water) box(g, bx + 5, by + 5, B - 7, 1, 'rgba(0,0,0,0.06)');
-  }
-  const pts = routeOf(W, H - 14, dest.page * 3 + from);
-  const seg = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])), total = seg.reduce((a, b) => a + b, 0);
-  for (let i = 1; i < pts.length; i++) { line(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 3, '#3b82f6'); }
-  for (let i = 1; i < pts.length; i++) line(g, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], 1, '#9cc1ff');
-  const [tx, ty] = pts[pts.length - 1];
-  box(g, tx - 6, ty - 13, 12, 11, INK); box(g, tx - 5, ty - 12, 10, 9, '#fffaf0'); drawIcon(g, dest.icon, tx - 4, ty - 11); box(g, tx, ty - 3, 1, 3, INK);
-  // where the car's got to
-  let left = p * total, cx = pts[0][0], cy = pts[0][1];
-  for (let i = 0; i < seg.length; i++) { if (left <= seg[i]) { const f = left / (seg[i] || 1); cx = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f; cy = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f; break; } left -= seg[i]; cx = pts[i + 1][0]; cy = pts[i + 1][1]; }
-  box(g, cx - 3, cy - 3, 7, 7, INK); box(g, cx - 2, cy - 2, 5, 5, '#ffffff'); box(g, cx - 1, cy - 1, 3, 3, '#d9483b');
+  // where the car's got to along the route
+  const seg = route.slice(1).map((q, i) => Math.hypot(q[0] - route[i][0], q[1] - route[i][1])), total = seg.reduce((a, b) => a + b, 0);
+  let left = p * total, cx = route[0][0], cy = route[0][1];
+  for (let i = 0; i < seg.length; i++) { if (left <= seg[i]) { const f = left / (seg[i] || 1); cx = route[i][0] + (route[i + 1][0] - route[i][0]) * f; cy = route[i][1] + (route[i + 1][1] - route[i][1]) * f; break; } left -= seg[i]; cx = route[i + 1][0]; cy = route[i + 1][1]; }
+  // the map, framed on the whole route (and the pin over its end), drifting along with the car
+  const vw = W - 4, vh = H - 17, xs = route.map(q => q[0]), ys = route.map(q => q[1]);
+  const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) - 12 + Math.max(...ys)) / 2;
+  const fit = (c: number, v: number, M: number) => (M <= v ? (M - v) / 2 : Math.max(0, Math.min(M - v, c - v / 2)));
+  const ox = Math.round(fit(mx + (cx - mx) * p * 0.5, vw, MW)), oy = Math.round(fit(my + (cy - my) * p * 0.5, vh, MH));
+  g.save(); g.beginPath(); g.rect(2, 2, vw, vh); g.clip();
+  box(g, 2, 2, vw, vh, '#ece5d2');
+  g.drawImage(drawCity(), 2 - ox, 2 - oy);
+  const X = (x: number) => 2 + x - ox, Y = (y: number) => 2 + y - oy;
+  for (let i = 1; i < route.length; i++) line(g, X(route[i - 1][0]), Y(route[i - 1][1]), X(route[i][0]), Y(route[i][1]), 4, '#1f5fd1');
+  for (let i = 1; i < route.length; i++) line(g, X(route[i - 1][0]), Y(route[i - 1][1]), X(route[i][0]), Y(route[i][1]), 2, '#4f94ff');
+  // where it set off from, where it's going (a pin with the place's sign), and the car
+  const [sx, sy] = route[0]; box(g, X(sx) - 2, Y(sy) - 2, 5, 5, INK); box(g, X(sx) - 1, Y(sy) - 1, 3, 3, '#ffffff');
+  const [tx, ty] = route[route.length - 1];
+  box(g, X(tx) - 6, Y(ty) - 13, 12, 11, INK); box(g, X(tx) - 5, Y(ty) - 12, 10, 9, '#fffaf0'); drawIcon(g, dest.icon, X(tx) - 4, Y(ty) - 11); box(g, X(tx), Y(ty) - 3, 1, 3, INK);
+  box(g, X(cx) - 3, Y(cy) - 3, 7, 7, INK); box(g, X(cx) - 2, Y(cy) - 2, 5, 5, '#ffffff'); box(g, X(cx) - 1, Y(cy) - 1, 3, 3, '#d9483b');
+  g.restore();
   // the bar along the bottom
   box(g, 2, H - 15, W - 4, 13, INK);
-  const m = Math.ceil(minutes(dest, from) * (1 - p));
   g.font = `800 9px ${GFONT}`; g.textAlign = 'left'; g.fillStyle = '#fff6e2'; g.fillText(p >= 1 ? `you've arrived` : `to ${dest.label}`, 7, H - 5);
-  if (p < 1) { g.textAlign = 'right'; g.fillStyle = '#f2d23a'; g.fillText(`${m} min`, W - 7, H - 5); }
+  if (p < 1) { g.textAlign = 'right'; g.fillStyle = '#f2d23a'; g.fillText(`${Math.ceil(mins * (1 - p))} min`, W - 7, H - 5); }
   // the bezel again, over the edges of the map
   box(g, 0, 0, W, 2, INK); box(g, 0, H - 2, W, 2, INK); box(g, 0, 0, 2, H, INK); box(g, W - 2, 0, 2, H, INK);
 }
@@ -390,6 +532,9 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
   const cv = useRef<HTMLCanvasElement>(null), gps = useRef<HTMLCanvasElement>(null), radio = useRef<HTMLCanvasElement>(null);
   const [song] = useState(() => SONGS[Math.floor(Math.random() * SONGS.length)]);
   const speed = useRef(0), want = useRef(0), dist = useRef(0), destRef = useRef<Dest | null>(null), started = useRef(0);
+  // where snug's setting off from, and the way the GPS picked this time
+  const here = dests.find(d => d.page === from)?.icon ?? 'home', route = useRef<{ pts: Pt[]; mins: number } | null>(null);
+  const go = (d: Dest) => { route.current = { pts: routeBetween(here, d.icon, Math.random() * 1000).pts, mins: minutesTo(here, d.icon) }; setDest(d); setPhase('drive'); };
   // routed, pulling off along it, and dark once the GPS has counted down its first minute (it doesn't have to get there)
   const MINUTE = 900, PULL = 300, DRIVE = PULL + MINUTE + 250;
 
@@ -411,7 +556,8 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
   const wsT = Math.round(PH * 0.05), wsB = Math.round(PH * (phone ? 0.55 : 0.6));
   const showCar = phase === 'car' || phase === 'drive' || phase === 'out' || phase === 'leave';
   // the GPS: as tall as its list while it asks, a map's worth once it's routing
-  const gw = Math.floor((phone ? Math.min(330, vw - 28) : 340) / GS), gh = dest ? Math.floor((phone ? 200 : 210) / GS) : 21 + dests.filter(d => d.page !== from).length * 20 + 6;
+  const MAP_H = phone ? 226 : 236; // the GPS's height on screen while it's showing the city
+  const gw = Math.floor((phone ? Math.min(330, vw - 28) : Math.min(360, vw * 0.38 - 16)) / GS), gh = dest ? Math.floor(MAP_H / GS) : 21 + dests.filter(d => d.page !== from).length * 20 + 6;
   const gpsX = phone ? (vw - gw * GS) / 2 : vw * 0.62, gpsY = wsB * S - (phone ? 22 : 34);
   // snug's colours for its hands and sleeves; a little snug for the dash
   const A = dressed(avatar), skin = (SKINS as Record<string, string[]>)[(avatar as { skin?: string }).skin ?? 'light'] ?? SKINS.light;
@@ -419,6 +565,7 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
   const bob = useRef<HTMLImageElement | null>(null);
   useEffect(() => { if (!outfit) return; const im = new Image(); im.src = figurine({ ...outfit, acc: outfit.acc.filter(a => a !== 'umbrella') }, 'happy', 'stand'); bob.current = im; }, [outfit]);
 
+  const picks = dests.filter(d => d.page !== from);
   // the whole car and the GPS, every frame while you're in it
   useEffect(() => {
     const c = cv.current, g = c?.getContext('2d'), gg = gps.current?.getContext('2d');
@@ -435,8 +582,8 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
       drawOutside(og, PW, wsB - wsT, dist.current, now, look);
       drawCar(g, PW, PH, out, speed.current, now, look, wsT, wsB, bob.current);
       // along the route at a minute (snug time) every MINUTE of ours
-      const d0 = destRef.current, p = d0 && started.current ? Math.min(1, Math.max(0, (now - started.current - PULL) / (minutes(d0, from) * MINUTE))) : 0;
-      drawGps(gg, gw, gh, dests, from, d0, p);
+      const d0 = destRef.current, r = route.current, p = d0 && r && started.current ? Math.min(1, Math.max(0, (now - started.current - PULL) / (r.mins * MINUTE))) : 0;
+      drawGps(gg, gw, gh, picks, here, d0, r?.pts ?? null, p, r?.mins ?? 0);
       const rg = radio.current?.getContext('2d');
       if (rg) drawRadio(rg, RW, RH, song, now, speed.current);
       raf = requestAnimationFrame(loop);
@@ -447,7 +594,6 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
 
   const driving = phase === 'drive' || phase === 'out';
   const dark = (phase === 'in' && lit) || phase === 'out' || phase === 'leave';
-  const picks = dests.filter(d => d.page !== from);
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, fontFamily: FONT, pointerEvents: phase === 'there' || phase === 'back' ? 'none' : 'auto' }}>
@@ -457,7 +603,7 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
           <canvas ref={cv} width={PW} height={PH} style={{ position: 'absolute', left: 0, top: 0, width: PW * S, height: PH * S, imageRendering: 'pixelated', animation: driving ? 'drive-bob .45s ease-in-out infinite' : undefined }} />
           {/* the radio, playing something good */}
           <canvas ref={radio} width={RW} height={RH} aria-label={`on the radio: ${song} by olivia rodrigo`}
-            style={{ position: 'absolute', left: phone ? vw / 2 - RW : vw * 0.47, top: phone ? gpsY + Math.floor((phone ? 200 : 210) / GS) * GS + 16 : (wsB + 20) * S, width: RW * 2, height: RH * 2, imageRendering: 'pixelated' }} />
+            style={{ position: 'absolute', left: phone ? vw / 2 - RW : vw * 0.47, top: phone ? gpsY + Math.floor(MAP_H / GS) * GS + 16 : (wsB + 20) * S, width: RW * 2, height: RH * 2, imageRendering: 'pixelated' }} />
           {/* the GPS on the dash, and where to tap on it */}
           <div style={{ position: 'absolute', left: gpsX, top: gpsY, width: gw * GS, height: gh * GS, filter: 'drop-shadow(0 6px 0 rgba(0,0,0,0.35))' }}>
             <canvas ref={gps} width={gw} height={gh} style={{ display: 'block', width: gw * GS, height: gh * GS, imageRendering: 'pixelated' }} />
@@ -465,7 +611,7 @@ export default function Drive({ from, dests, sky, avatar, outfit, onArrive, onCl
               <>
                 <button onClick={() => setPhase('leave')} aria-label="stay here" style={{ position: 'absolute', right: 4 * GS, top: 4 * GS, width: 48 * GS, height: 14 * GS }} />
                 {picks.map((d, k) => (
-                  <button key={d.page} onClick={() => { setDest(d); setPhase('drive'); }} aria-label={`go to ${d.label}`}
+                  <button key={d.page} onClick={() => go(d)} aria-label={`go to ${d.label}`}
                     style={{ position: 'absolute', left: 6 * GS, top: (21 + k * 20) * GS, width: (gw - 12) * GS, height: 18 * GS }} />
                 ))}
               </>

@@ -128,7 +128,8 @@ export default function World({ pages, today, ready, driveFrom, onDrive, jump, o
       const e = el as HTMLElement;
       e.style.transition = tr;
       if (e === av || e === sh) { e.style.zIndex = '3'; e.style.translate = page ? `${target - box.avLeft}px 0` : '0 0'; }
-      else if (pin && (e.dataset.rv === 'board' || e.hasAttribute('data-pin'))) e.style.translate = '0 0'; // the snug board and sign out stay put, like the place picker
+      else if (e.hasAttribute('data-follow')) return; // hangs off the snug board and moves with it (SignOutTag)
+      else if (pin && e.dataset.rv === 'board') e.style.translate = '0 0'; // the snug board stays put, like the place picker
       else e.style.translate = `${-page * box.pw}px 0`;
     });
     if (page === shown.current) { instant.current = false; return; } // just keeping up with the layout, no walk
