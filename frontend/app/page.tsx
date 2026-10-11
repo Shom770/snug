@@ -15,6 +15,7 @@ import World, { type WorldPage } from '../components/World';
 import Thrift, { thriftSnugAt, type ThriftTop } from '../components/Thrift';
 import Boutique, { boutiqueSnugAt, type MaisonPiece } from '../components/Boutique';
 import Airport, { airportSnugAt } from '../components/Airport';
+import Drive, { Fade, type Dest } from '../components/Drive';
 import { maisonDrop, seasonAt, thriftRack, thriftTheme, thriftWeek } from '../lib/closet';
 import LocationSearch, { type Place } from '../components/LocationSearch';
 import { api, SignIn, type User } from '../components/auth';
@@ -38,6 +39,8 @@ interface Forecast { forecastId: number | null; score: number; curve: number[]; 
 interface Tomorrow { date: string; outfit: Outfit; label: string; curve: number[]; startHour: number; hi: number; lo: number }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+// the windshield on these days: wipers going, or snow coming at it
+const WET_SKY = ['drizzle', 'rain', 'storm', 'hail', 'sleet'], SNOW_SKY = ['snow', 'blizzard'];
 
 // The forecast last shown in this browser, so opening snug again in the same hour (same person and place) shows it
 // straight away instead of replaying the loading world. The server is still asked in the background.
@@ -236,6 +239,10 @@ export default function Home() {
 
   // phones walk to the chair on its own page; computers have it right beside snug
   const [phone, setPhone] = useState(false);
+  // driving somewhere: from which page of the world; and where the car dropped snug off (the world jumps there)
+  const [driving, setDriving] = useState<{ from: number } | null>(null);
+  const [jump, setJump] = useState<{ page: number; key: number } | null>(null);
+  const [homeward, setHomeward] = useState(false); // fading straight home from a place snug drove to
   useEffect(() => { const m = () => setPhone(window.innerWidth < 760); m(); window.addEventListener('resize', m); return () => window.removeEventListener('resize', m); }, []);
   const poofed = usePoofed();
 
@@ -278,6 +285,14 @@ export default function Home() {
     day: { when: tomorrowWord(t), label: t.label, curve: t.curve, startHour: t.startHour, hi: t.hi, lo: t.lo } as ChairDay,
   });
 
+  // where the car's GPS can take snug: home, tomorrow's chair (phones), the shops, the airport (the world's pages)
+  const hasChair = phone && !!tomorrow && !morning, shop0 = hasChair ? 2 : 1;
+  const dests: Dest[] = [
+    { page: 0, label: 'home', icon: 'home' },
+    ...(hasChair && tomorrow ? [{ page: 1, label: `${tomorrowWord(tomorrow)}'s outfit`, icon: 'chair' } as Dest] : []),
+    { page: shop0, label: 'hand-me-snugs', icon: 'thrift' }, { page: shop0 + 1, label: 'maison snugé', icon: 'boutique' }, { page: shop0 + 2, label: 'the airport', icon: 'plane' },
+  ];
+
   if (!me) return <div style={{ minHeight: '100vh', background: '#f3ede1' }} />;
   return (
     <div style={{ position: 'relative' }}>
@@ -297,9 +312,9 @@ export default function Home() {
             avatar={{ ...prefs?.avatar, day: dayNo(morning.date), wet: !!morning.outfit.boots } as Avatar} />
         : tomorrow && !phone && <Chair key={'t' + tomorrow.date} {...chairProps(tomorrow)} />)}
       {jamming && <Jam />}
-      {/* further along snug's world: tomorrow's chair (phones), then the thrift store */}
+      {/* further along snug's world: tomorrow's chair (phones), then the thrift store; past the first stop, by car */}
       {showApp && done && thrift && (
-        <World ready={poofed} today={weather?.outfit} pages={[
+        <World ready={poofed} today={weather?.outfit} driveFrom={phone && tomorrow && !morning ? 1 : 0} onDrive={from => setDriving({ from })} jump={jump} onHome={() => setHomeward(true)} pages={[
           ...(phone && tomorrow && !morning ? [{ key: 'chair', label: tomorrowWord(tomorrow), snugAt: chairSnugAt, render: c => <ChairPage ctx={c} {...chairProps(tomorrow)} /> } as WorldPage] : []),
           { key: 'thrift', label: 'thrift', snugAt: thriftSnugAt, render: c => (
             <Thrift ctx={c} rack={thrift.rack} theme={thrift.theme} nextDays={thrift.next} avatar={(prefs?.avatar ?? {}) as Avatar} today={weather?.outfit} owned={owned} wind={weather?.wind} onTake={takeHome} />
@@ -309,6 +324,12 @@ export default function Home() {
           ) },
           { key: 'airport', label: 'airport', snugAt: airportSnugAt, render: c => <Airport ctx={c} avatar={(prefs?.avatar ?? {}) as Avatar} home={place} units={prefs?.units} outfit={weather?.outfit} /> },
         ]} />
+      )}
+      {homeward && <Fade onMid={() => setJump({ page: 0, key: Date.now() })} onDone={() => setHomeward(false)} />}
+      {driving && (
+        <Drive from={driving.from} dests={dests} avatar={(prefs?.avatar ?? {}) as Avatar} outfit={weather?.outfit}
+          sky={{ night: !!(weather?.night || weather?.dark), rain: WET_SKY.includes(weather?.condition ?? ''), snow: SNOW_SKY.includes(weather?.condition ?? '') }}
+          onArrive={page => setJump({ page, key: Date.now() })} onClose={() => setDriving(null)} />
       )}
       {character && (
         <CharacterPanel initial={prefs?.avatar} mode={character}

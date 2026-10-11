@@ -61,7 +61,15 @@ export function ArrowSign({ text, dir }: { text: string; dir: 'left' | 'right' }
  * there until you come back, when it walks home and goes back to what it was doing.
  * The places' skies and hills are copies of the first screen's, joined so the seams don't show.
  */
-export default function World({ pages, today, ready }: { pages: WorldPage[]; today?: Outfit; ready: boolean }) {
+export default function World({ pages, today, ready, driveFrom, onDrive, jump, onHome }: {
+  pages: WorldPage[]; today?: Outfit; ready: boolean;
+  /** from this page on, the way further is by car: its sign says "head out" and calls onDrive(page) instead of walking on */
+  driveFrom?: number; onDrive?: (from: number) => void;
+  /** be on this page now, no walk (the car dropping snug off, while the screen's black); a new key each time */
+  jump?: { page: number; key: number } | null;
+  /** back from a place snug drove to: straight home (the page fades it), not a walk back along the street */
+  onHome?: () => void;
+}) {
   const [av, setAv] = useState<HTMLElement | null>(null);
   const [box, setBox] = useState<{ u: number; pw: number; ph: number; head: number; ground: number; avLeft: number } | null>(null);
   const [page, setPage] = useState(0);
@@ -72,6 +80,10 @@ export default function World({ pages, today, ready }: { pages: WorldPage[]; tod
   const walk = useRef<ReturnType<typeof setTimeout> | undefined>(undefined); // arriving: outlives layout updates mid-walk
   const keep = useRef<MutationObserver | null>(null); // what keeps snug standing while it's away
   const n = pages.length, go = (p: number) => setPage(Math.max(0, Math.min(n, p)));
+  const instant = useRef(false); // the next page change is a jump, not a walk
+  const [snap, setSnap] = useState(false); // ...so nothing slides across either
+  useEffect(() => { if (!jump) return; instant.current = true; setSnap(true); setPage(Math.max(0, Math.min(n, jump.page))); }, [jump?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const drives = (k: number) => !!onDrive && driveFrom != null && k >= driveFrom;
 
   // measure the scene and snug, and keep the extra pages' skies matching the first's weather
   useEffect(() => {
@@ -103,15 +115,26 @@ export default function World({ pages, today, ready }: { pages: WorldPage[]; tod
     const hero = av?.parentElement;
     if (!hero || !av || !box) return;
     const sh = hero.querySelector<HTMLElement>('[data-rv="sh"]');
-    const tr = `translate ${WALK}s cubic-bezier(.45,0,.3,1)`;
+    const tr = instant.current ? 'none' : `translate ${WALK}s cubic-bezier(.45,0,.3,1)`;
     [...hero.children].forEach(el => {
       const e = el as HTMLElement;
       e.style.transition = tr;
       if (e === av || e === sh) { e.style.zIndex = '3'; e.style.translate = page ? `${target - box.avLeft}px 0` : '0 0'; }
       else e.style.translate = `${-page * box.pw}px 0`;
     });
-    if (page === shown.current) return; // just keeping up with the layout, no walk
+    if (page === shown.current) { instant.current = false; return; } // just keeping up with the layout, no walk
     shown.current = page;
+    if (instant.current) {
+      // dropped off: already there, standing (or, home, back to what it was doing); the walking transition back next frame
+      instant.current = false;
+      clearTimeout(walk.current); setOverride(null);
+      av.style.animation = av.dataset.rest || '';
+      if (page) { if (today) { sitting.current ??= av.getAttribute('src'); av.setAttribute('src', standing(today, 'happy', 'stand')); } }
+      else { keep.current?.disconnect(); keep.current = null; if (sitting.current) { av.setAttribute('src', sitting.current); sitting.current = null; } }
+      setArrived(page);
+      requestAnimationFrame(() => requestAnimationFrame(() => setSnap(false)));
+      return;
+    }
     setArrived(-1); setOverride(null);
     if (today) { sitting.current ??= av.getAttribute('src'); av.setAttribute('src', standing(today, 'happy', 'stand')); }
     av.style.animation = `snug-waddle .32s ease-in-out ${Math.round(WALK / 0.32)}`;
@@ -175,8 +198,8 @@ export default function World({ pages, today, ready }: { pages: WorldPage[]; tod
     {/* the first arrow lives in its own layer above everything in the scene (the hours on the hill take taps there too),
         panning with the world */}
     {ready && (
-      <button onClick={() => go(1)} aria-label={pages[0].label} style={{ position: 'absolute', right: 10, top: arrowTop, zIndex: 20, translate: `${-page * pw}px 0`, transition: `translate ${WALK}s cubic-bezier(.45,0,.3,1)` }}>
-        <span style={{ display: 'block', animation: 'snug-pop .45s cubic-bezier(.3,1.4,.5,1) both, snug-nudge-x 1.8s .5s ease-in-out infinite' }}><ArrowSign text={pages[0].label} dir="right" /></span>
+      <button onClick={() => (drives(0) ? onDrive!(0) : go(1))} aria-label={drives(0) ? 'head out' : pages[0].label} style={{ position: 'absolute', right: 10, top: arrowTop, zIndex: 20, translate: `${-page * pw}px 0`, transition: snap ? 'none' : `translate ${WALK}s cubic-bezier(.45,0,.3,1)` }}>
+        <span style={{ display: 'block', animation: 'snug-pop .45s cubic-bezier(.3,1.4,.5,1) both, snug-nudge-x 1.8s .5s ease-in-out infinite' }}><ArrowSign text={drives(0) ? 'head out' : pages[0].label} dir="right" /></span>
       </button>
     )}
     <div data-world>
@@ -195,14 +218,20 @@ export default function World({ pages, today, ready }: { pages: WorldPage[]; tod
             </div>
             <div style={{ position: 'absolute', left: 4, top: 0, width: pw, height: ph }}>
               {pg.render(c)}
-              {k < n && (
-                <button onClick={() => go(k + 1)} aria-label={pages[k].label} style={{ position: 'absolute', right: 10, top: arrowTop, zIndex: 3, animation: 'snug-nudge-x 1.8s ease-in-out infinite' }}>
-                  <ArrowSign text={pages[k].label} dir="right" />
+              {(drives(k) || k < n) && (
+                <button onClick={() => (drives(k) ? onDrive!(k) : go(k + 1))} aria-label={drives(k) ? 'head out' : pages[k].label} style={{ position: 'absolute', right: 10, top: arrowTop, zIndex: 3, animation: 'snug-nudge-x 1.8s ease-in-out infinite' }}>
+                  <ArrowSign text={drives(k) ? 'head out' : pages[k].label} dir="right" />
                 </button>
               )}
-              <button onClick={() => go(k - 1)} aria-label={`back to ${back(k)}`} style={{ position: 'absolute', left: 10, top: box.ground + 30, zIndex: 3 }}>
-                <ArrowSign text={back(k)} dir="left" />
-              </button>
+              {onHome && driveFrom != null && k > driveFrom ? (
+                <button onClick={onHome} aria-label="back home" style={{ position: 'absolute', left: 10, top: box.ground + 30, zIndex: 3 }}>
+                  <ArrowSign text="home" dir="left" />
+                </button>
+              ) : (
+                <button onClick={() => go(k - 1)} aria-label={`back to ${back(k)}`} style={{ position: 'absolute', left: 10, top: box.ground + 30, zIndex: 3 }}>
+                  <ArrowSign text={back(k)} dir="left" />
+                </button>
+              )}
             </div>
           </div>
         );
