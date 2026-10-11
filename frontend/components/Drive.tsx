@@ -308,38 +308,65 @@ const PIKE = 150; // the strip mall's road
 const EXPY: Pt[] = [[0, 4], [22, 4], [68, 4], [132, 4], [176, 4], [188, 8], [195, 18], [196, 30], [196, MARKET], [196, 90], [196, MH]];
 // where each place on the GPS's list is
 const SPOTS: Record<keyof typeof ICONS, Pt> = { home: [45, 120], chair: [22, 99], park: [100, 52], thrift: [PIKE, 60], boutique: [PIKE, 86], plane: [212, 116] };
-type Road = 'st' | 'main' | 'hw' | 'ramp';
-const PACE: Record<Road, number> = { st: 1, main: 0.8, hw: 0.42, ramp: 0.9 }; // how slow each kind of road is
+type Road = 'st' | 'main' | 'lane' | 'hw' | 'ramp';
+const PACE: Record<Road, number> = { st: 1, main: 0.8, lane: 1.15, hw: 0.42, ramp: 0.9 }; // how slow each kind of road is
+/** How downtown somewhere is: 1 in the thick of it, falling away to 0 and below where the city thins out to houses. */
+const dens = (x: number, y: number) => 1 - Math.hypot((x - 76) / 62, (y - 60) / 56);
+/** The grid's ragged southeast edge: past it the streets give out, and it's lanes and houses. */
+const beyond = (x: number, y: number) => x + y > 238;
+const segKey = (a: Pt, b: Pt) => [a, b].map(p => p.join(',')).sort().join('|');
+// out on the edges the blocks get bigger: these streets were never put through
+// (and on the east side the outer avenue was never put through: the streets just run on out as lanes)
+const NEVER = new Set([[[116, 26], [132, 26]], [[116, 52], [132, 52]], [[116, 78], [132, 78]], [[86, 120], [86, 134]], [[22, 12], [38, 12]],
+  ...[12, 26, 38, 52, MARKET, 78].map((y, k, ys) => [[132, y], [132, ys[k + 1] ?? 92]])].map(([a, b]) => segKey(a as Pt, b as Pt)));
+const gone = (a: Pt, b: Pt) => beyond(Math.max(a[0], b[0]), Math.max(a[1], b[1])) || NEVER.has(segKey(a, b));
+/** A gentle curve from a to b, pulled toward c, on whole pixels. */
+const bend = (a: Pt, c: Pt, b: Pt, n = 6): Pt[] => Array.from({ length: n + 1 }, (_, k) => {
+  const t = k / n, u = 1 - t;
+  return [Math.round(u * u * a[0] + 2 * u * t * c[0] + t * t * b[0]), Math.round(u * u * a[1] + 2 * u * t * c[1] + t * t * b[1])] as Pt;
+});
+// the lanes past the edge of the grid: one out to the pike, one to a cul-de-sac, one off south out of town
+const LANES: Pt[][] = [bend([132, 106], [136, 122], [PIKE, 120]), bend([116, 120], [113, 134], [126, 140]), bend([86, 134], [85, 140], [78, MH])];
+const CULDESAC: Pt = [126, 140];
 
-interface City { pts: Pt[]; adj: { to: number; cost: number; id: number }[][]; at: Map<string, number> }
+interface City { pts: Pt[]; adj: { to: number; cost: number; id: number }[][]; at: Map<string, number>; roads: { a: Pt; b: Pt; kind: Road }[] }
 let city: City | null = null;
 function cityGraph(): City {
   if (city) return city;
-  const pts: Pt[] = [], adj: City['adj'] = [], at = new Map<string, number>();
+  const pts: Pt[] = [], adj: City['adj'] = [], at = new Map<string, number>(), roads: City['roads'] = [];
   let ids = 0;
   const node = ([x, y]: Pt) => { const k = `${x},${y}`; if (!at.has(k)) { at.set(k, pts.length); pts.push([x, y]); adj.push([]); } return at.get(k)!; };
   const road = (a: Pt, b: Pt, kind: Road) => {
     const i = node(a), j = node(b), cost = Math.hypot(a[0] - b[0], a[1] - b[1]) * PACE[kind], id = ids++;
-    adj[i].push({ to: j, cost, id }); adj[j].push({ to: i, cost, id });
+    adj[i].push({ to: j, cost, id }); adj[j].push({ to: i, cost, id }); roads.push({ a, b, kind });
   };
+  const chain = (ps: Pt[], kind: Road) => ps.slice(1).forEach((p, k) => road(ps[k], p, kind));
+  // the grid: streets that would cross the park stop at its edge, ones past the ragged edge aren't there, and out
+  // where it's quiet they're only lanes
   const inPark = (x: number, y: number) => x > PARK.x0 && x < PARK.x1 && y > PARK.y0 && y < PARK.y1;
-  AVES.forEach(x => STS.slice(1).forEach((y, k) => { if (!inPark(x, (y + STS[k]) / 2)) road([x, STS[k]], [x, y], x === BROAD ? 'main' : 'st'); }));
-  STS.forEach(y => AVES.slice(1).forEach((x, k) => { if (!inPark((x + AVES[k]) / 2, y)) road([AVES[k], y], [x, y], y === MARKET ? 'main' : 'st'); }));
+  const grid = (a: Pt, b: Pt, big: boolean) => {
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    if (!inPark(mx, my) && !gone(a, b)) road(a, b, big ? 'main' : dens(mx, my) < 0 ? 'lane' : 'st');
+  };
+  AVES.forEach(x => STS.slice(1).forEach((y, k) => grid([x, STS[k]], [x, y], x === BROAD)));
+  STS.forEach(y => AVES.slice(1).forEach((x, k) => grid([AVES[k], y], [x, y], y === MARKET)));
   road([BROAD, MARKET], [22, 26], 'main'); // the parkway, out to the river
-  // out east: three streets run on to the pike, and Market on past the strip mall to the expressway
-  [38, MARKET, 92].forEach(y => road([132, y], [PIKE, y], y === MARKET ? 'main' : 'st'));
-  [38, 52, MARKET, 78, 92, 106].slice(1).forEach((y, k) => road([PIKE, [38, 52, MARKET, 78, 92, 106][k]], [PIKE, y], 'main'));
-  road([PIKE, MARKET], [196, MARKET], 'main');
+  road([0, MARKET], [22, MARKET], 'main'); // Market's bridge
+  // out east: two lanes and Market run on to the pike, and Market on past the strip mall to the expressway
+  [38, MARKET, 92].forEach(y => road([132, y], [PIKE, y], y === MARKET ? 'main' : 'lane'));
+  chain([10, 38, 52, MARKET, 78, 92, 106, 120, MH].map(y => [PIKE, y] as Pt), 'main');
+  road([PIKE, MARKET], [196, MARKET], 'main'); road([196, MARKET], [MW, MARKET], 'main');
+  LANES.forEach(l => chain(l, 'lane'));
   // the expressway, along the top and down to the airport, with on-ramps from the avenues
   EXPY.slice(1, 10).forEach((p, k) => road(EXPY[k], p, 'hw'));
   [22, 68, 132].forEach(x => road([x, 4], [x, 12], 'ramp'));
   road([196, 90], [204, 100], 'ramp'); road([204, 100], SPOTS.plane, 'ramp');
   // the places themselves, each on its street
-  road([38, 120], SPOTS.home, 'st'); road(SPOTS.home, [52, 120], 'st');
-  road([22, 92], SPOTS.chair, 'st'); road(SPOTS.chair, [22, 106], 'st');
+  road([38, 120], SPOTS.home, 'lane'); road(SPOTS.home, [52, 120], 'lane');
+  road([22, 92], SPOTS.chair, 'lane'); road(SPOTS.chair, [22, 106], 'lane');
   road([PIKE, 52], SPOTS.thrift, 'main'); road(SPOTS.thrift, [PIKE, MARKET], 'main');
   road([PIKE, 78], SPOTS.boutique, 'main'); road(SPOTS.boutique, [PIKE, 92], 'main');
-  return (city = { pts, adj, at });
+  return (city = { pts, adj, at, roads });
 }
 /** The way from one place to another on the city's roads. With a seed, every road's a little quicker or slower than
  * usual (traffic, lights), so each drive can go its own way. */
@@ -362,35 +389,77 @@ function routeBetween(from: keyof typeof ICONS, to: keyof typeof ICONS, seed: nu
 }
 const minutesTo = (from: keyof typeof ICONS, to: keyof typeof ICONS) => Math.max(2, Math.round(routeBetween(from, to, null).cost / 16));
 
-/** The city itself, drawn once: river, blocks and buildings, the park, the rowhouses, the strip mall, the airport, and
- * the roads over it all. */
+/** The city itself, drawn once: thick downtown in the middle thinning out to houses on their lawns and then fields and
+ * trees, the river, the park and the square, the strip mall, the airport, and the roads over it all. */
 let cityMap: HTMLCanvasElement | null = null;
 function drawCity(): HTMLCanvasElement {
   if (cityMap) return cityMap;
   const cv = document.createElement('canvas'); cv.width = MW; cv.height = MH;
   const g = cv.getContext('2d')!;
-  box(g, 0, 0, MW, MH, '#ece5d2');
+  const tree = (x: number, y: number) => { box(g, x, y, 2, 2, '#8fbe77'); box(g, x + 1, y + 1, 1, 1, '#76a560'); };
+  const HOUSE = ['#d9b796', '#cfa889', '#c9a07f', '#dcbfa0'];
+  const house = (x: number, y: number, k: number) => { box(g, x, y, 3, 2, HOUSE[Math.floor(rnd(k) * 4)]); box(g, x, y + 1, 3, 1, '#b8916f'); };
+  // the outskirts: grass and trees, more of them the further out
+  box(g, 0, 0, MW, MH, '#e3e6c9');
+  for (let k = 0; k < 260; k++) { const x = rnd(k * 2.7) * MW, y = rnd(k * 5.3 + 1) * MH; if (dens(x, y) < 0.1 - rnd(k) * 0.4) tree(x, y); }
   // the river down the west side, a little bendy, with ripples
   for (let y = 0; y < MH; y++) { const c = 7 + 3 * Math.sin(y / 17) + 1.5 * Math.sin(y / 7); box(g, 0, y, c + 5, 1, '#9cc8e8'); box(g, c + 5, y, 1, 1, '#c9dfe9'); }
   for (let k = 0; k < 14; k++) box(g, 2 + rnd(k) * 6, 4 + k * 10, 3, 1, '#c1dcef');
-  // downtown's blocks, each with a few buildings in it
+  // the blocks: packed with buildings (the tallest darker) downtown, buildings round a yard further out, then houses
   const BLDG = ['#d9cdb0', '#d2c4a6', '#ddd2b9', '#cfc0a0'];
+  const { roads } = cityGraph(), on = new Set(roads.map(r => segKey(r.a, r.b))); // (buildings face the streets that are there)
   AVES.slice(1).forEach((x1, i) => STS.slice(1).forEach((y1, j) => {
     const x0 = AVES[i], y0 = STS[j];
-    box(g, x0, y0, x1 - x0, y1 - y0, '#e4dbc4');
+    if (beyond(x1, y1)) return;
+    const top = on.has(segKey([x0, y0], [x1, y0])), bottom = on.has(segKey([x0, y1], [x1, y1]));
+    const left = on.has(segKey([x0, y0], [x0, y1])), right = on.has(segKey([x1, y0], [x1, y1])), whole = top && bottom && left && right;
+    const d = whole ? dens((x0 + x1) / 2, (y0 + y1) / 2) : Math.min(0.18, dens((x0 + x1) / 2, (y0 + y1) / 2)), ix = x0 + 2, iy = y0 + 2, iw = x1 - x0 - 4, ih = y1 - y0 - 4;
     if (x0 >= ROWS.x0 && x1 <= ROWS.x1 && y0 >= ROWS.y0 && y1 <= ROWS.y1) {
       // rowhouses: two rows of little roofs back to back, gardens down the middle
-      for (let x = x0 + 2; x < x1 - 2; x += 2) { box(g, x, y0 + 2, 1, 3, rnd(x + y0) > 0.5 ? '#d9b796' : '#cfa889'); box(g, x, y1 - 5, 1, 3, rnd(x * 3 + y1) > 0.5 ? '#d9b796' : '#cfa889'); }
-      box(g, x0 + 2, y0 + 6, x1 - x0 - 4, y1 - y0 - 12, '#d6e2bf');
+      box(g, x0, y0, x1 - x0, y1 - y0, '#e2e3c6');
+      for (let x = ix; x < x1 - 2; x += 2) { box(g, x, iy, 1, 3, rnd(x + y0) > 0.5 ? '#d9b796' : '#cfa889'); box(g, x, y1 - 5, 1, 3, rnd(x * 3 + y1) > 0.5 ? '#d9b796' : '#cfa889'); }
+      box(g, ix, y0 + 6, iw, y1 - y0 - 12, '#d6e2bf');
       return;
     }
-    const n = 2 + Math.floor(rnd(i * 7 + j * 3) * 3), w = x1 - x0 - 4;
-    for (let k = 0, x = x0 + 2; k < n; k++) {
-      const bw = k === n - 1 ? x0 + 2 + w - x : Math.max(2, Math.round(w / n + (rnd(i + j * 5 + k) - 0.5) * 3));
-      const tall = rnd(i * 11 + j + k * 2) > 0.7;
-      box(g, x, y0 + 2, bw - 1, y1 - y0 - 4, tall && x0 >= 52 && x1 <= 132 && y1 <= 92 ? '#c7b796' : BLDG[(i + j + k) % 4]);
-      x += bw;
+    if (d > 0.5) {
+      // downtown: lot after lot, some built right through, some front and back, the odd alley between
+      box(g, x0, y0, x1 - x0, y1 - y0, '#d8cdb2');
+      for (let x = ix, k = 0; x < ix + iw; k++) {
+        const s = i * 31 + j * 7 + k, w = Math.min(ix + iw - x, 3 + Math.floor(rnd(s) * 4));
+        const tall = rnd(s * 1.7) > 0.72 - (d - 0.5) * 0.6, c = tall ? '#c2b08e' : BLDG[(i + j + k) % 4];
+        if (rnd(s * 2.3) > 0.5) { const cut = iy + 2 + Math.floor(rnd(s * 3.1) * (ih - 4)); box(g, x, iy, w - 1, cut - iy, c); box(g, x, cut + 1, w - 1, iy + ih - cut - 1, BLDG[(i + j + k + 1) % 4]); }
+        else box(g, x, iy, w - 1, ih, c);
+        if (tall) { box(g, x + w - 2, iy, 1, ih, '#a8977a'); box(g, x, iy, w - 2, 1, '#d6c7a6'); }
+        x += w + (rnd(s * 4.9) > 0.85 ? 1 : 0);
+      }
+      return;
     }
+    if (d > 0.18) {
+      // the middle of town: buildings along the streets, a yard behind with a tree or two
+      box(g, x0, y0, x1 - x0, y1 - y0, '#e3dcc5');
+      box(g, ix, iy + 3, iw, ih - 6, '#dfe2c4');
+      for (const [y, h] of ([[iy, 3, top], [iy + ih - 3, 3, bottom]] as const).filter(r => r[2])) {
+        for (let x = ix, k = 0; x < ix + iw; k++) {
+          const s = i * 17 + j * 13 + k + y, w = Math.min(ix + iw - x, 3 + Math.floor(rnd(s) * 3));
+          if (rnd(s * 1.9) > 0.15) box(g, x, y, w - 1, h, BLDG[(i + j + k) % 4]);
+          x += w;
+        }
+      }
+      if (ih > 9 && rnd(i * 5 + j) > 0.3) tree(ix + 2 + rnd(i + j * 9) * (iw - 5), iy + ih / 2 - 1);
+      return;
+    }
+    // out where it's quiet: houses on their lawns facing whichever streets there are, trees out back (and a block
+    // that isn't closed in all round just runs on into the grass)
+    if (whole) box(g, x0, y0, x1 - x0, y1 - y0, '#dfe6c4');
+    for (let y = iy + 4; y + 3 <= iy + ih - 3; y += 5) {
+      if (left && !top && rnd(y * 1.7 + x0) > 0.2) house(ix, y, y + x0);
+      if (right && !bottom && rnd(y * 2.9 + x1) > 0.2) house(ix + iw - 3, y, y * 3 + x1);
+    }
+    for (let x = ix; x + 3 <= ix + iw; x += 5) {
+      if (top && rnd(x * 1.3 + y0) > 0.2) house(x, iy, x + y0);
+      if (bottom && rnd(x * 2.1 + y1) > 0.2) house(x, iy + ih - 2, x * 3 + y1);
+    }
+    for (let k = 0; k < (top && bottom ? 2 : 4); k++) if (ih > 8 && rnd(i * 3 + j * 11 + k) > 0.35) tree(ix + rnd(i * 7 + j + k * 13) * (iw - 2), iy + 3 + rnd(j * 5 + k) * (ih - 7));
   }));
   // the little square: grass, two paths crossing, a fountain in the middle
   box(g, SQUARE.x0, SQUARE.y0, SQUARE.x1 - SQUARE.x0, SQUARE.y1 - SQUARE.y0, '#b9d7a0');
@@ -407,13 +476,23 @@ function drawCity(): HTMLCanvasElement {
   for (let x = PARK.x0 + 2; x < PARK.x1 - 1; x++) box(g, x, 38 + Math.round(2 * Math.sin(x / 4)), 1, 1, '#efe8d5');
   for (let a = 0; a < 6.3; a += 0.05) { const x = 104 + 7 * Math.cos(a), y = 22 + 4 * Math.sin(a); box(g, x, y, 1, 1, '#9cc8e8'); }
   disc(g, 104, 22, 4, '#9cc8e8'); box(g, 101, 20, 6, 4, '#9cc8e8'); box(g, 102, 21, 2, 1, '#c1dcef');
-  // out east: lawns along the pike, then the strip mall: its lot, its long low building, a storefront for each shop
-  box(g, AVES[AVES.length - 1] + 1, 10, PIKE - AVES[AVES.length - 1] - 2, MH - 10, '#e3e3cf');
+  // houses along the lanes past the grid, on both sides, with gaps
+  ([...LANES, [[132, 38], [PIKE, 38]], [[132, 92], [PIKE, 92]]] as Pt[][]).forEach((l, n) => {
+    const seg = l.slice(1).map((q, k) => ({ a: l[k], b: q, len: Math.hypot(q[0] - l[k][0], q[1] - l[k][1]) })), total = seg.reduce((s, q) => s + q.len, 0);
+    for (let t = 5, k = 0; t < total - 5; t += 4.5, k++) {
+      let left = t, s = seg[0];
+      for (const q of seg) { s = q; if (left <= q.len) break; left -= q.len; }
+      const f = left / (s.len || 1), x = s.a[0] + (s.b[0] - s.a[0]) * f, y = s.a[1] + (s.b[1] - s.a[1]) * f;
+      const nx = -(s.b[1] - s.a[1]) / (s.len || 1), ny = (s.b[0] - s.a[0]) / (s.len || 1), side = k % 2 ? 1 : -1;
+      if (rnd(n * 19 + k) > 0.18) house(x + nx * 4.5 * side - 1.5, y + ny * 4.5 * side - 1, n * 7 + k);
+      else tree(x + nx * 5 * side - 1, y + ny * 5 * side - 1);
+    }
+  });
+  // out east: the strip mall on the pike: its lot, its long low building, a storefront for each shop
   box(g, PIKE + 3, 50, 22, 46, '#d3d2cb');
   for (let y = 53; y < 94; y += 4) for (let x = PIKE + 5; x < PIKE + 24; x += 3) box(g, x, y, 1, 2, '#f6f4ee');
   box(g, PIKE + 25, 49, 11, 48, '#a88f6c'); box(g, PIKE + 26, 50, 9, 46, '#e3cba3');
   [['#7fb07a', 56], ['#e0a35a', 64], ['#c46a5a', 72], ['#6d8fb5', 78], ['#3f6b58', 84], ['#d9c46a', 91]].forEach(([c, y]) => box(g, PIKE + 25, y as number, 2, 5, c as string));
-  for (let y = 12; y < MH; y += 7) box(g, PIKE + 40, y, 2, 2, '#9cbf86');
   // the airport, past the expressway: grass, two runways, the terminal and its planes
   box(g, 200, 96, MW - 200, MH - 96, '#dde6c8');
   box(g, 206, 128, MW - 206, 6, '#8e949c'); for (let x = 209; x < MW - 2; x += 5) box(g, x, 130, 3, 1, '#f4f4f4');
@@ -421,28 +500,17 @@ function drawCity(): HTMLCanvasElement {
   box(g, 216, 110, 22, 10, '#c4c8cc');
   box(g, 219, 101, 19, 8, INK); box(g, 220, 102, 17, 6, '#d7dce2'); for (let x = 221; x < 236; x += 3) box(g, x, 103, 2, 2, '#9cc1ff');
   [[220, 113], [229, 114]].forEach(([x, y]) => { box(g, x, y, 5, 1, '#ffffff'); box(g, x + 2, y - 1, 1, 3, '#ffffff'); });
-  // roads: a casing first, then the road on top (the expressway orange, the big streets yellow, the rest white)
-  const casing = (pts: Pt[], w: number, c: string) => pts.slice(1).forEach((p, k) => line(g, pts[k][0], pts[k][1], p[0], p[1], w, c));
-  const all: { pts: Pt[]; kind: Road }[] = [];
-  // (the streets that would cross the park stop at its edge)
-  AVES.forEach(x => all.push({ pts: [[x, [22, BROAD, 132].includes(x) ? 4 : x > PARK.x0 && x < PARK.x1 ? PARK.y1 : 12], [x, 134]], kind: x === BROAD ? 'main' : 'st' }));
-  STS.forEach(y => {
-    const x0 = y === MARKET ? 0 : 22, x1 = y === MARKET ? MW : [38, 92].includes(y) ? PIKE : 132, kind: Road = y === MARKET ? 'main' : 'st';
-    if (y > PARK.y0 && y < PARK.y1) all.push({ pts: [[x0, y], [PARK.x0, y]], kind }, { pts: [[PARK.x1, y], [x1, y]], kind });
-    else all.push({ pts: [[x0, y], [x1, y]], kind });
-  });
-  all.push({ pts: [[BROAD, MARKET], [22, 26]], kind: 'main' }, { pts: [[PIKE, 10], [PIKE, MH]], kind: 'main' });
-  const drawn = (kind: Road, w: number, c: string) => all.filter(r => r.kind === kind).forEach(r => casing(r.pts, w, c));
-  drawn('st', 4, '#d5cbb3'); drawn('main', 5, '#d1b46a');
-  drawn('st', 2, '#ffffff'); drawn('main', 3, '#fbe3a0');
+  // roads: casings first, then the roads on top: lanes thin, streets white, the big streets yellow, ramps orange
+  const pave = (kind: Road, w: number, c: string) => roads.filter(r => r.kind === kind).forEach(r => line(g, r.a[0], r.a[1], r.b[0], r.b[1], w, c));
+  pave('lane', 3, '#cfc3a8'); pave('st', 4, '#d5cbb3'); pave('main', 5, '#d1b46a'); disc(g, CULDESAC[0], CULDESAC[1], 3, '#cfc3a8');
+  pave('lane', 1, '#ffffff'); pave('st', 2, '#ffffff'); pave('main', 3, '#fbe3a0'); disc(g, CULDESAC[0], CULDESAC[1], 2, '#ffffff');
   // city hall: a circle where Broad meets Market, the hall in the middle
   disc(g, BROAD, MARKET, 5, '#d1b46a'); disc(g, BROAD, MARKET, 4, '#fbe3a0'); box(g, BROAD - 2, MARKET - 2, 4, 4, '#b39d76'); box(g, BROAD - 1, MARKET - 1, 2, 2, '#e8dcc2');
   // the cloverleaf where Market crosses the expressway: four loops
-  [[-6, -6], [6, -6], [-6, 6], [6, 6]].forEach(([dx, dy]) => { disc(g, 196 + dx, MARKET + dy, 5, '#d39a3e'); disc(g, 196 + dx, MARKET + dy, 4, '#f6c879'); disc(g, 196 + dx, MARKET + dy, 2, '#ece5d2'); });
-  [[22, 4], [68, 4], [132, 4]].forEach(([x, y]) => { line(g, x, y, x, y + 8, 3, '#f6c879'); });
-  line(g, 196, 90, 204, 100, 3, '#f6c879'); line(g, 204, 100, SPOTS.plane[0], SPOTS.plane[1], 3, '#f6c879');
+  [[-6, -6], [6, -6], [-6, 6], [6, 6]].forEach(([dx, dy]) => { disc(g, 196 + dx, MARKET + dy, 5, '#d39a3e'); disc(g, 196 + dx, MARKET + dy, 4, '#f6c879'); disc(g, 196 + dx, MARKET + dy, 2, '#e3e6c9'); });
+  pave('ramp', 4, '#d39a3e'); pave('ramp', 2, '#f6c879');
+  const casing = (pts: Pt[], w: number, c: string) => pts.slice(1).forEach((p, k) => line(g, pts[k][0], pts[k][1], p[0], p[1], w, c));
   casing(EXPY, 6, '#c9852a'); casing(EXPY, 4, '#f4b350'); casing(EXPY, 1, '#fbd38a');
-  box(g, 0, MARKET - 1, 12, 3, '#fbe3a0'); // Market's bridge over the river
   return (cityMap = cv);
 }
 

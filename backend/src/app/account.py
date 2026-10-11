@@ -189,6 +189,28 @@ async def book_trip(body: TripIn, user: Row = Depends(require_user), db: Databas
                  user.id, body.place.name, body.place.lat, body.place.lon, body.start, body.end, *home, utcnow())
 
 
+class TripOut(BaseModel):
+    place: str
+    lat: float
+    lon: float
+    start: str
+    end: str
+    away: bool  # they're there now
+
+
+@router.get('/me/trip', response_model=TripOut | None)
+async def next_trip(user: Row = Depends(require_user), db: Database = Depends(get_db)):
+    """The trip they've booked (or are on), for the airport to show; nothing once it's over."""
+    t = await db.first("SELECT * FROM trips WHERE user_id = ? AND state IN ('booked', 'away')", user.id)
+    return TripOut(place=t.place_name, lat=t.lat, lon=t.lon, start=t.start_date, end=t.end_date, away=t.state == 'away') if t else None
+
+
+@router.delete('/me/trip', status_code=204)
+async def cancel_trip(user: Row = Depends(require_user), db: Database = Depends(get_db)):
+    """Not going after all. Only a trip that hasn't started: once they're away, getting home is up to the trip."""
+    await db.run("DELETE FROM trips WHERE user_id = ? AND state = 'booked'", user.id)
+
+
 def _same_place(p: Row | None, name: str, lat: float, lon: float) -> bool:
     return bool(p and p.lat is not None and p.lon is not None and (p.place_name == name or (abs(p.lat - lat) < 0.05 and abs(p.lon - lon) < 0.05)))
 

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Avatar } from './CharacterPanel';
 import type { Place } from './LocationSearch';
@@ -502,6 +502,43 @@ export const airportSnugAt = (c: PageCtx) => Math.round(layout(c).snugX);
  * the places flipping round on it), pick the days you'll be there, and it prints your boarding pass; then snug's
  * suitcase goes through the x-ray, packed with what it'll wear there, day by day, from its own closet.
  */
+/** A booked trip: where, when, and whether they're there now. */
+interface Booked { place: string; lat: number; lon: number; start: string; end: string; away: boolean }
+
+/** The trip as a calendar file, to drop into their own calendar (an all-day event over the days they're away). */
+function saveToCalendar(t: Booked) {
+  const d = (s: string) => s.replace(/-/g, ''), city = cityOf({ name: t.place });
+  const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//snug//trips//EN', 'BEGIN:VEVENT', `UID:snug-trip-${d(t.start)}-${hash(t.place)}@snug`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`, `DTSTART;VALUE=DATE:${d(t.start)}`, `DTEND;VALUE=DATE:${d(dateOf(dayNo(t.end) + 1))}`,
+    `SUMMARY:trip to ${city}`, `LOCATION:${t.place.replace(/[,;]/g, m => '\\' + m)}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' })); a.download = `trip to ${city.toLowerCase()}.ics`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** The booked trip, as a page on the calendar: the month in red over the first day, where and when, and what's next. */
+function TripCal({ t, onCancel }: { t: Booked; onCancel: () => void }) {
+  return (
+    <div style={{ padding: 3, background: INK, clipPath: CP(4), animation: 'air-cal .45s cubic-bezier(.3,1.4,.5,1) both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 9px', background: PAPER, clipPath: CP(4), color: INK }}>
+        <div style={{ position: 'relative', flex: 'none', width: 44, border: `2px solid ${INK}`, background: '#fff', textAlign: 'center' }}>
+          {[9, 29].map(x => <span key={x} aria-hidden style={{ position: 'absolute', left: x, top: -5, width: 3, height: 7, background: INK }} />)}
+          <div style={{ background: '#d9483b', color: '#fff', fontSize: 10, fontWeight: 800, letterSpacing: 1.2, padding: '3px 0 2px' }}>{monOf(t.start).toUpperCase()}</div>
+          <div style={{ fontSize: 21, fontWeight: 800, lineHeight: '25px' }}>{+t.start.slice(8)}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.away ? 'away in' : 'booked:'} {cityOf({ name: t.place }).toLowerCase()}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, marginTop: 1 }}>{span(t.start, t.end).toLowerCase()} · {t.away ? "you're there now" : 'on your calendar'}</div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11.5, fontWeight: 800 }}>
+            <button onClick={() => saveToCalendar(t)} style={{ color: NAVY, textDecoration: 'underline' }}>add to my calendar</button>
+            {!t.away && <button onClick={onCancel} style={{ color: MUTED, textDecoration: 'underline' }}>cancel trip</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: { ctx: PageCtx; avatar: Avatar; home: Place; units?: '°F' | '°C'; outfit?: Outfit; onBooked?: () => void }) {
   const L = layout(ctx), { s, flip } = L;
   const pad = L.phone ? 10 : 14, tw = Math.floor((L.boardW - 2 * pad - 4 - (N - 1) * 2) / (N + 1.3)), th = Math.round(tw * 1.3);
@@ -514,6 +551,15 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
   const [range, setRange] = useState<[string, string] | null>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [err, setErr] = useState('');
+  const [booked, setBooked] = useState<Booked | null>(null); // the trip on their calendar, if there is one
+  const [booking, setBooking] = useState(false);
+  const [passH, setPassH] = useState(0); // how tall the boarding pass came out
+  const passRO = useRef<ResizeObserver | null>(null);
+  const passRef = useCallback((el: HTMLDivElement | null) => {
+    passRO.current?.disconnect(); passRO.current = null;
+    if (!el) { setPassH(0); return; }
+    passRO.current = new ResizeObserver(() => setPassH(el.offsetHeight)); passRO.current.observe(el);
+  }, []);
   // pick: choosing where; dates; print: the pass coming out; scan: the bag in the x-ray; done
   const [phase, setPhase] = useState<'pick' | 'dates' | 'want' | 'print' | 'in' | 'scan' | 'out' | 'done'>('pick');
   const [shownTag, setShownTag] = useState(true);
@@ -589,16 +635,24 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
   useEffect(() => {
     if (phase === 'want' && trip) setPhase('print');
     if (phase === 'want' && err) setPhase('dates');
-    if (phase === 'print') {
-      later(1900, () => setPhase('in'));
-      // booked: on its first day their place becomes this city (and goes back after), unless they change it themselves
-      if (dest && range) api('/me/trip', { place: { name: dest.name, lat: dest.lat, lon: dest.lon }, start: range[0], end: range[1] }, 'PUT').then(() => onBooked?.()).catch(() => {});
-    }
+    if (phase === 'print') later(1900, () => setPhase('in'));
     if (phase === 'in') later(1300, () => setPhase('scan'));
     if (phase === 'scan') later(400 + (1.4 + packed.length * 0.12) * 1000 + 900, () => setPhase('out'));
     if (phase === 'out') later(1300, () => { setPhase('done'); setShownTag(true); });
   }, [phase, trip, err]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => { api<Booked | null>('/me/trip').then(setBooked).catch(() => {}); }, []);
+  // booking it (the pass alone is only a look): on its first day their place becomes this city (and goes back after),
+  // unless they change it themselves
+  const isBooked = !!(booked && dest && range && booked.place === dest.name && booked.start === range[0] && booked.end === range[1]);
+  const book = () => {
+    if (!dest || !range || booking) return;
+    const t = { place: dest.name, lat: dest.lat, lon: dest.lon, start: range[0], end: range[1], away: false };
+    setBooking(true);
+    api('/me/trip', { place: { name: t.place, lat: t.lat, lon: t.lon }, start: t.start, end: t.end }, 'PUT')
+      .then(() => { setBooked(t); onBooked?.(); }).catch(() => {}).finally(() => setBooking(false));
+  };
+  const cancel = () => { api('/me/trip', undefined, 'DELETE').then(() => setBooked(null)).catch(() => {}); };
   const restart = () => { timers.current.forEach(clearTimeout); timers.current = []; setPhase('pick'); setDest(null); setRange(null); setQ(''); setTrip(null); setWeek(0); };
 
   const choose = (p: Dest) => { setDest(p); setQ(''); setHits([]); setTyping(false); inp.current?.blur(); setPhase('dates'); setRange(null); setWeek(0); };
@@ -659,6 +713,8 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
       <style>{`@keyframes flap-in{from{transform:scaleY(.15);filter:brightness(.6)}to{transform:none}}
         @keyframes air-blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
         @keyframes air-print{from{translate:0 -100%}to{translate:0 0}}
+        @keyframes air-cal{from{opacity:0;scale:.7;rotate:-5deg}to{opacity:1;scale:1;rotate:0deg}}
+        @keyframes air-stamp{from{opacity:0;scale:2.2}60%{opacity:.9;scale:.92}to{opacity:.85;scale:1}}
         @keyframes air-sweep{from{left:0}to{left:100%}}
         @keyframes air-xray{0%{opacity:0;filter:brightness(3)}100%{opacity:.88}}
         @keyframes air-tear{0%{translate:0 0;rotate:0deg}30%{translate:0 4px;rotate:-.8deg}100%{translate:3px 12px;rotate:1.3deg}}
@@ -804,6 +860,11 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
         <span aria-hidden style={{ position: 'absolute', left: 14, right: 14, bottom: 0, height: 3, background: '#000', boxShadow: '0 -1px 0 #2b2b2b' }} />
       </div>
 
+      {/* their booked trip, while they're picking where to next */}
+      {phase === 'pick' && booked && (
+        <div style={{ position: 'absolute', left: L.boardX, top: boardBottom + 12, width: L.boardW, zIndex: 2 }}><TripCal t={booked} onCancel={cancel} /></div>
+      )}
+
       {/* print it */}
       {(phase === 'dates' || phase === 'want') && (
         <button onClick={() => setPhase('want')} disabled={!range || phase === 'want'}
@@ -820,7 +881,7 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
         {/* torn off: a ragged scrap stays in the slot */}
         {phase !== 'print' && <span aria-hidden style={{ position: 'absolute', left: L.boardX + 10, top: boardBottom - 1, width: L.boardW - 20, height: 6, background: PAPER, borderLeft: `2px solid ${INK}`, borderRight: `2px solid ${INK}`, clipPath: torn(false), zIndex: 1 }} />}
         <div style={{ position: 'absolute', left: L.boardX + 8, top: boardBottom - 1, width: L.boardW - 16, overflow: phase === 'print' ? 'hidden' : 'visible', zIndex: 1, paddingBottom: 8, filter: 'drop-shadow(0 6px 0 rgba(20,16,30,0.3))' }}>
-          <div style={{ animation: phase === 'print' ? 'air-print 1.8s steps(14) both' : 'air-tear .8s cubic-bezier(.3,.7,.4,1) both', transformOrigin: '20% 0', background: PAPER, color: INK, border: `2px solid ${INK}`, clipPath: phase === 'print' ? undefined : torn(true), margin: '0 2px' }}>
+          <div ref={passRef} style={{ position: 'relative', animation: phase === 'print' ? 'air-print 1.8s steps(14) both' : 'air-tear .8s cubic-bezier(.3,.7,.4,1) both', transformOrigin: '20% 0', background: PAPER, color: INK, border: `2px solid ${INK}`, clipPath: phase === 'print' ? undefined : torn(true), margin: '0 2px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: NAVY, color: PAPER, fontSize: 10.5, fontWeight: 800, letterSpacing: 1.6 }}>
               <Pix rows={PLANE} pal={{ '#': YELLOW }} size={1.6} /> SNUG AIR <span style={{ marginLeft: 'auto', opacity: 0.85 }}>BOARDING PASS</span>
             </div>
@@ -856,8 +917,25 @@ export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: 
               </svg>
               {trip.days.some(d => d.typical) && <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, marginLeft: 'auto', textAlign: 'right' }}>* last year&apos;s weather</span>}
             </div>
+            {isBooked && (
+              <span aria-hidden style={{ position: 'absolute', left: '50%', top: L.phone ? 30 : 34, translate: '-50% 0', rotate: '-9deg', padding: '1px 8px', border: '3px solid #d9483b', color: '#d9483b', background: 'rgba(251,246,236,0.75)', fontSize: 17, fontWeight: 800, letterSpacing: 3, animation: 'air-stamp .35s cubic-bezier(.3,1.3,.5,1) both' }}>BOOKED</span>
+            )}
           </div>
         </div>
+        {/* only a look until they book it (up over snug, who'd stand in front of it on a phone) */}
+        {phase !== 'print' && passH > 0 && (
+          <OnTop>
+            <div style={{ position: 'absolute', left: L.boardX + 10, top: boardBottom - 1 + passH + 10, width: L.boardW - 20, fontFamily: FONT }}>
+              {isBooked && booked ? <TripCal t={booked} onCancel={cancel} /> : (
+                <button onClick={book} disabled={booking} style={{ display: 'block', width: '100%', padding: 4, background: INK, clipPath: CP(4), animation: 'air-cal .45s cubic-bezier(.3,1.4,.5,1) both' }}>
+                  <span style={{ display: 'block', padding: '9px 0', background: YELLOW, clipPath: CP(4), color: '#111', fontSize: 15, fontWeight: 800, letterSpacing: 0.3 }}>
+                    {booking ? 'booking…' : booked ? `book this trip instead (of ${cityOf({ name: booked.place }).toLowerCase()})` : 'book this trip'}
+                  </span>
+                </button>
+              )}
+            </div>
+          </OnTop>
+        )}
         </>
       )}
 

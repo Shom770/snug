@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from './auth';
 import { OnTop, type HomeCtx, type PageCtx } from './World';
 import type { Outfit } from '../lib/types';
@@ -557,11 +557,14 @@ const HOUSES = ['     #           #    ', '    ###   ##    ###   ', '   #####  #
 
 /** A postcard from a friend's city: the city's landmark (or a quiet street) under their sky, the city, a stamp (a
  * heart, or a shirt for loving your fit) with its postmark, and who sent it. */
-function Postcard({ l, i, onToss }: { l: Letter; i: number; onToss: () => void }) {
+function Postcard({ l, i, last, onToss }: { l: Letter; i: number; last: boolean; onToss: () => void }) {
   const [gone, setGone] = useState(false); // tossed: off the pile it flies...
   const [shut, setShut] = useState<number | null>(null); // ...then the gap it left closes up (its height, then 0)
   const slot = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (shut !== null && shut > 0) { const r = requestAnimationFrame(() => setShut(0)); return () => cancelAnimationFrame(r); } }, [shut]);
+  // the last one: the pile goes straight to "nothing yet", closing down to it as the card flies
+  const end = last ? EMPTY : 0;
+  const toss = () => { setGone(true); if (last) setShut(slot.current?.offsetHeight ?? 0); };
+  useEffect(() => { if (shut !== null && shut !== end) { const r = requestAnimationFrame(() => setShut(end)); return () => cancelAnimationFrame(r); } }, [shut, end]);
   const c = l.condition ?? '', wet = WET.includes(c), snowy = SNOWY.includes(c), clear = SUNNY.includes(c);
   const city = (l.city ?? '').toLowerCase(), shape = LANDMARKS[city] ?? HOUSES;
   const sky = l.night ? ['#1c2452', '#2b3566', '#3b4577'] : wet || snowy ? ['#8a93a1', '#9aa2ae', '#aab1bb'] : ['#8ec5ea', '#a9d3ef', '#c8e3f4'];
@@ -570,12 +573,13 @@ function Postcard({ l, i, onToss }: { l: Letter; i: number; onToss: () => void }
   return (
     // its place in the pile: closes up once it's been tossed, and settles when a card above it goes
     <div ref={slot} style={{ position: 'relative', zIndex: i, height: shut ?? undefined, marginTop: shut === 0 ? 0 : i ? -26 : 0, transition: 'height .32s cubic-bezier(.4,0,.2,1), margin-top .32s cubic-bezier(.4,0,.2,1)' }}
-      onTransitionEnd={e => { if (e.target === slot.current && e.propertyName === 'height' && shut === 0) onToss(); }}>
+      onTransitionEnd={e => { if (e.target === slot.current && e.propertyName === 'height' && shut === end) onToss(); }}>
+    {last && <div style={{ ...NOTHING, position: 'absolute', left: 0, right: 0, top: 0, opacity: gone ? 0.7 : 0, transition: 'opacity .25s .1s' }}>nothing yet</div>}
     <div style={{ position: 'relative', rotate: gone ? '24deg' : `${[-2.5, 2, -1, 3][i % 4]}deg`, translate: gone ? '130% -20px' : '0 0', opacity: gone ? 0 : 1,
       transition: 'translate .35s cubic-bezier(.5,0,.8,.6), rotate .35s, opacity .3s .05s', filter: 'drop-shadow(0 3px 0 rgba(20,10,4,0.25))' }}
-      onTransitionEnd={e => { if (gone && e.target === e.currentTarget && e.propertyName === 'translate') setShut(slot.current?.offsetHeight ?? 0); }}>
+      onTransitionEnd={e => { if (gone && !last && e.target === e.currentTarget && e.propertyName === 'translate') setShut(slot.current?.offsetHeight ?? 0); }}>
       {/* toss it */}
-      <button onClick={() => setGone(true)} aria-label={`toss ${l.name}'s postcard`} style={{ position: 'absolute', left: -6, top: -6, zIndex: 2, width: 20, height: 20, padding: 2, background: INK, clipPath: CP2 }}>
+      <button onClick={toss} aria-label={`toss ${l.name}'s postcard`} style={{ position: 'absolute', left: -6, top: -6, zIndex: 2, width: 20, height: 20, padding: 2, background: INK, clipPath: CP2 }}>
         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', background: TAG, clipPath: CP2, color: INK, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>×</span>
       </button>
       <div style={{ padding: 2, background: INK, clipPath: CP2 }}>
@@ -611,9 +615,15 @@ function Postcard({ l, i, onToss }: { l: Letter; i: number; onToss: () => void }
   );
 }
 
+const EMPTY = 26; // how tall "nothing yet" is
+const NOTHING: CSSProperties = { height: EMPTY, lineHeight: `${EMPTY}px`, fontSize: 15, fontWeight: 800, textAlign: 'center', opacity: 0.7 };
+
 function Mail({ letters, onToss }: { letters: Letter[]; onToss: (id: number) => void }) {
-  if (!letters.length) return <div style={{ fontSize: 15, fontWeight: 800, padding: '6px 0', textAlign: 'center', opacity: 0.7 }}>nothing yet</div>;
-  return <div style={{ padding: '2px 2px 4px' }}>{letters.map((l, i) => <Postcard key={l.id} l={l} i={i} onToss={() => onToss(l.id)} />)}</div>;
+  return (
+    <div style={{ padding: '2px 2px 4px' }}>
+      {letters.length ? letters.map((l, i) => <Postcard key={l.id} l={l} i={i} last={letters.length === 1} onToss={() => onToss(l.id)} />) : <div style={NOTHING}>nothing yet</div>}
+    </div>
+  );
 }
 
 /** The picture a shared link shows: snug in today's fit on a sunny hill, and a wooden sign: "add me as a friend on
