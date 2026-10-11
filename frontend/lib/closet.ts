@@ -15,8 +15,17 @@ export const COLORS = {
   green: ['#4f8a4a', '#3b6d37', '#6aa864'], olive: ['#7a7a52', '#5f5f3e', '#96966c'], tan: ['#c29a6b', '#a07c52', '#d6b58c'],
   brown: ['#6b4a33', '#523624', '#8a6447'], grey: ['#8c8f98', '#6f727a', '#a9acb4'], charcoal: ['#3e4048', '#2c2e34', '#555863'],
   black: ['#1f1f22', '#141416', '#34343a'],
+  // the thrift store's colours (washed, sun-faded, a little off)
+  matcha: ['#9fb86b', '#7f9a52', '#bad08a'], cocoa: ['#8a5a44', '#6e4535', '#a7735a'], washed: ['#4a4a50', '#38383d', '#606068'],
+  cherry: ['#b8283a', '#8f1c2c', '#d64a5a'], baby: ['#bcd8f2', '#9dbde0', '#d6e8f8'], coral: ['#f0806a', '#d06450', '#f7a08e'],
+  lilac: ['#b9a4dc', '#9a85bf', '#d2c2ea'], ivory: ['#f6f0e0', '#ded5bf', '#fffbf0'], rust: ['#b85a2e', '#954521', '#d07a4c'],
+  // the boutique's colours (soft, rich, a little gold)
+  blush: ['#f3c9c9', '#dfaaa9', '#fbe0de'], pearl: ['#f6f1e7', '#ddd5c4', '#ffffff'], champagne: ['#ead8b6', '#d2bd96', '#f6ead2'],
+  camel: ['#c49a6c', '#a57d52', '#d9b88f'], mocha: ['#7b5a48', '#614536', '#97735f'], gold: ['#d9b45a', '#b8923e', '#ecd08a'],
+  bronze: ['#b07a45', '#8a5a2e', '#d29a62'], silver: ['#c3c8d0', '#9aa0aa', '#e6e9ee'], tortoise: ['#7a4a26', '#4f2e16', '#b07a3a'], chrome: ['#d6dbe2', '#8f97a3', '#ffffff'],
 };
 const INK = '#1c1a28';
+const IRI = [['#f7c6e3', '#e2a3c9'], ['#c6e6f7', '#a3c6e2'], ['#d2f2cf', '#a9d4a5'], ['#e3d2f7', '#c1abe2'], ['#f8e3c2', '#dfc29a']];
 const TIEDYE = ['#f2a6c4', '#f6d36b', '#8fd3c4', '#a9b8f2', '#f2b49a'];
 
 // little chest pictures: a = the piece's accent colour, d = accent shade, w = white, k = ink, g = leaf green, y = yellow
@@ -30,10 +39,21 @@ export const MOTIFS = {
   bolt: ['  yy', ' yy ', 'yyyy', ' yy ', 'yy  '],
   moon: [' yy ', 'yy  ', 'yy  ', ' yy '],
   letter: ['aaa', 'a  ', 'aaa', '  a', 'aaa'],
+  flame: ['  y  ', ' yay ', 'yaaay', 'yaaay', ' aaa '],
+  butterfly: ['a   a', 'aa aa', ' aka ', 'aa aa', 'a   a'],
+  mushroom: [' aaa ', 'awaaw', 'aaaaa', '  w  ', '  w  '],
+  bow: ['aa aa', 'aaaaa', 'aa aa', ' a a '],
+  mountain: ['  w  ', ' aaa ', 'aaaaa'],
+  snowflake: ['w w w', ' www ', 'wwwww', ' www ', 'w w w'],
+  eightball: [' kkk ', 'kwwwk', 'kwkwk', 'kwwwk', ' kkk '],
+  sun: ['y y y', ' yyy ', 'yyyyy', ' yyy ', 'y y y'],
+  checker: ['kwkwk', 'wkwkw', 'kwkwk'],
+  wave: ['   a ', ' aaaa', 'aa ww', 'wwwww'],
+  palm: ['gg gg', ' ggg ', '  a  ', '  a  ', ' aaa '],
 };
 
 // tags people can filter the racks by
-export const TAGS = ['cute', 'cozy', 'classic', 'sporty', 'street', 'preppy', 'beachy', 'bold'];
+export const TAGS = ['cute', 'cozy', 'classic', 'sporty', 'street', 'preppy', 'beachy', 'bold', 'luxe'];
 
 // [id, kind, name, base colour, accent colour, details, tags]
 const L = [
@@ -194,7 +214,11 @@ export const ITEMS = L.map(([id, kind, name, base, acc, fx, tags]) => ({
   id, kind, name, base, acc, fx, tags, dept: GIRLS.has(id) ? 'girls' : 'all',
   colors: [base, ...(COMMON[kind] || []).filter(c => c !== base && c !== acc)].slice(0, 6),
 }));
-export const ITEM = Object.fromEntries(ITEMS.map(it => [it.id, it]));
+// every piece by id; a thrift or boutique id (thrift-..., maison-...) is made up from the id itself, so a piece from
+// any week's drop still works long after the drop has moved on
+export const ITEM = new Proxy(Object.fromEntries(ITEMS.map(it => [it.id, it])), {
+  get(t, k) { if (typeof k === 'string' && !(k in t)) { const it = k.startsWith('thrift-') ? thriftItem(k) : k.startsWith('maison-') ? CAPSULE_ITEMS.find(c => c.id === k) ?? maisonItem(k) : null; if (it) t[k] = it; } return t[k]; },
+});
 export const has = (it, f) => !!it && it.fx.includes(f);
 
 /**
@@ -210,6 +234,10 @@ export function applyFx(P, it, R, col, acc) {
   for (const f of it.fx) {
     if (f === 'closed' && R.front) each(R.front, (x, y) => P(x, y, col[0]));
     else if (f === 'stripes') each(all, (x, y) => { if ((y - R.y0) % 3 === 2) P(x, y, A[0]); });
+    // the boutique's finishes: iridescent bands, scattered sequins, a metallic shine
+    else if (f === 'holo') each(all, (x, y) => { const b = ((x + y) >> 1) % 5; P(x, y, (y - R.y0) % 3 === 2 ? IRI[b][1] : IRI[b][0]); });
+    else if (f === 'sequin') each(all, (x, y) => { if ((x * 7 + y * 13) % 9 === 0) P(x, y, '#ffffff'); else if ((x * 5 + y * 11) % 7 === 0) P(x, y, col[2]); });
+    else if (f === 'metallic') each(all, (x, y) => { const d = (x + y) % 8; if (d === 0) P(x, y, '#ffffff'); else if (d <= 2) P(x, y, col[2]); });
     else if (f === 'rugby') each(body, (x, y) => { if (((y - R.y0) >> 1) % 2 === 1) P(x, y, A[0]); });
     else if (f === 'check') each(all, (x, y) => { if (((x + y) & 1) === 0 && ((x >> 1) + (y >> 1)) % 2 === 0) P(x, y, A[0]); });
     else if (f === 'plaid') each(all, (x, y) => { const a = (x - R.x0) % 4 === 0, b = (y - R.y0) % 4 === 0; if (a && b) P(x, y, A[1]); else if (a || b) P(x, y, A[0]); });
@@ -268,21 +296,28 @@ const KIT_LIST = {
   beachy: { label: 'beachy', items: { tank: ['stripe-tank', 'tiedye-tank'], tee: ['breton-tee', 'tiedye-tee'], long: ['stripe-long', 'linen-shirt'], sweater: ['crewneck'], light: ['denim-jacket'], hoodie: ['tiedye-hoodie'], coat: ['parka'], rain: ['raincoat'], shorts: ['board-shorts', 'linen-shorts', 'cutoffs'], pants: ['linen-pants', 'wide-jeans'], shoe: ['checker-slipons'], beanie: ['beanie'], scarf: ['scarf'], sunglasses: ['star-shades', 'round-shades'], umbrella: ['stripe-umbrella'] }, girls: { shorts: ['denim-skirt'] } },
   playful: { label: 'playful', items: { tank: ['cherry-tank'], tee: ['heart-tee', 'smiley-tee', 'frog-tee', 'star-tee'], long: ['heart-long', 'stripe-long'], sweater: ['heart-sweater', 'fuzzy'], light: ['varsity'], hoodie: ['smiley-hoodie', 'heart-hoodie'], coat: ['pastel-puffer', 'duffle'], rain: ['dot-raincoat', 'frog-raincoat'], shorts: ['cutoffs'], pants: ['wide-jeans'], shoe: ['hightops'], beanie: ['bear-beanie', 'frog-beanie'], scarf: ['dot-scarf'], sunglasses: ['heart-shades'], umbrella: ['dot-umbrella', 'frog-umbrella'] }, girls: { shorts: ['pleat-skirt'], shoe: ['maryjanes'] } },
 };
+// the extras they choose to wear (in the closet), whatever the weather: they're not part of what Jev dresses snug in
+export const EXTRAS = new Set(['bag', 'hat', 'glasses', 'chain', 'headphones']);
 // pieces only for a properly wet day (puddles), never just because they match the vibe
 const WET_ONLY = new Set(['rainboots']);
 // legacy per-style picks, as a vibe tag
 export const STYLE_TAG = { casual: 'classic', surf: 'beachy', minimal: 'classic', sporty: 'sporty', street: 'street', preppy: 'preppy', cozy: 'cozy' };
 /** What snug wears today from what it owns: one vibe for the day (cycling through the tags they own), and every
  * piece picked to match it, or else to match the rest of the outfit, so joggers don't end up with a polo. Rain boots
- * come out on wet days (and always do then, if owned); otherwise only when they're the only shoes. */
-export function dressFrom(wardrobe, day, kinds, wet = false) {
+ * come out on wet days (their own pair, or the store's); otherwise only when they're the only shoes. */
+export function dressFrom(wardrobe, day, kinds, wet = false, allExtras = false) {
   const tagsOf = p => (p.id && ITEM[p.id] ? ITEM[p.id].tags : [STYLE_TAG[p.s] || 'classic']);
   // a vibe has to tie at least two kinds of clothing together, or it can't make an outfit match
   const kindsWith = t => Object.values(wardrobe).filter(l => l.some(p => tagsOf(p).includes(t))).length;
   const tags = [...new Set(Object.values(wardrobe).flat().flatMap(tagsOf))].sort(), linked = tags.filter(t => kindsWith(t) >= 2);
   const pool0 = linked.length ? linked : tags, vibe = pool0.length ? pool0[day % pool0.length] : null;
   const worn = {}, chosen = [];
-  kinds.forEach((k, ki) => { const all = wardrobe[k]; if (!all || !all.length) return;
+  kinds.forEach((k, ki) => { const all = wardrobe[k];
+    // extras (bag, hat, glasses, chain, headphones) are only on when they've chosen to wear them (avOf puts those on)
+    if (EXTRAS.has(k) && !allExtras) return;
+    // a wet day with no rain boots in the closet: the store's pair, so the outfit's still right for puddles
+    if (wet && k === 'shoe' && !(all || []).some(p => WET_ONLY.has(p.id))) { worn[k] = { id: 'rainboots' }; chosen.push(worn[k]); return; }
+    if (!all || !all.length) return;
     const rainy = all.filter(p => WET_ONLY.has(p.id)), dry = all.filter(p => !WET_ONLY.has(p.id));
     const list = wet && rainy.length ? rainy : dry.length ? dry : all;
     const score = p => (tagsOf(p).includes(vibe) ? 10 : 0) + chosen.reduce((s, q) => s + tagsOf(p).filter(t => tagsOf(q).includes(t)).length, 0);
@@ -300,4 +335,221 @@ export function kitWardrobe(id, body) {
   Object.entries(k.items).forEach(([kind, ids]) => { w[kind] = ids.filter(i => ITEM[i]).map(i => ({ id: i })); });
   if (body === 'girl') Object.entries(k.girls).forEach(([kind, ids]) => { w[kind] = [...ids.filter(i => ITEM[i]).map(i => ({ id: i })), ...(w[kind] || [])].slice(0, 12); });
   return w;
+}
+
+
+// ---- the thrift store -------------------------------------------------------------------------------------------
+// A new rack every Monday: a theme for the week, and tops the store makes up itself from the theme's colourways, cuts,
+// patterns and graphics, named like the tags on a real vintage rack. Everyone in the same season sees the same rack
+// (it's all seeded by the week), and the season comes from where you are: wool in a northern January, tanks in a
+// southern one, and the tropics stay in summer.
+
+const DAY0_MONDAY = 4; // 1970-01-05, the first Monday after the epoch (day numbers count from 1970-01-01)
+/** Days since 1970 by the local calendar for a YYYY-MM-DD date. */
+const dayNo = d => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86400000;
+/** Which thrift week a local date is in, and how many days until the next rack (1-7). */
+export function thriftWeek(date) {
+  const n = dayNo(date) - DAY0_MONDAY;
+  return { week: Math.floor(n / 7), next: 7 - (((n % 7) + 7) % 7) };
+}
+/** The season at a place on a date: by month, flipped south of the equator; the tropics are always summer. */
+export function seasonAt(date, lat) {
+  if (Math.abs(lat) < 23.5) return 'summer';
+  const m = (+date.slice(5, 7) + (lat < 0 ? 6 : 0) - 1) % 12 + 1;
+  return m >= 3 && m <= 5 ? 'spring' : m >= 6 && m <= 8 ? 'summer' : m >= 9 && m <= 11 ? 'autumn' : 'winter';
+}
+
+// themes: colourways [base, accent], the patterns and graphics they lean on, words for the names, the closet's tags
+const THEMES = {
+  racing: { label: 'y2k racing', pairs: [['black', 'red'], ['white', 'red'], ['ivory', 'black'], ['navy', 'yellow'], ['red', 'white']], fx: ['raglan', 'armstripe', 'block', 'sidestripe'], motifs: ['flame', 'checker', 'bolt', 'star'], words: ['turbo', 'pit crew', 'grand prix', 'pole position', 'lap one'], tags: ['street', 'bold'] },
+  coquette: { label: 'coquette', pairs: [['pink', 'rose'], ['ivory', 'cherry'], ['white', 'pink'], ['butter', 'rose'], ['baby', 'pink']], fx: ['ringer', 'dots', 'collar'], motifs: ['bow', 'heart', 'cherry', 'butterfly'], words: ['ballet', 'sweetheart', 'lace', 'ribbon', 'pirouette'], tags: ['cute'] },
+  surf: { label: 'surf shack', pairs: [['baby', 'coral'], ['ivory', 'teal'], ['sky', 'butter'], ['coral', 'ivory'], ['mint', 'navy']], fx: ['stripes', 'tiedye', 'ringer'], motifs: ['wave', 'palm', 'sun'], words: ['low tide', 'boardwalk', 'salt', 'sunburn', 'beach club'], tags: ['beachy', 'bold'] },
+  skate: { label: 'skate park', pairs: [['butter', 'navy'], ['white', 'green'], ['baby', 'cherry'], ['ivory', 'cocoa'], ['washed', 'white']], fx: ['ringer', 'check', 'stripes'], motifs: ['smiley', 'flame', 'eightball'], words: ['ollie', 'kickflip', 'halfpipe', 'grip tape', 'nollie'], tags: ['street'] },
+  grunge: { label: 'grunge', pairs: [['washed', 'burgundy'], ['black', 'olive'], ['olive', 'black'], ['burgundy', 'washed'], ['charcoal', 'lilac']], fx: ['stripes', 'plaid', 'frayed'], motifs: ['moon', 'star', 'eightball'], words: ['static', 'dial-up', 'basement', 'feedback', 'b-side'], tags: ['street', 'cozy'] },
+  college: { label: 'college merch', pairs: [['navy', 'white'], ['burgundy', 'ivory'], ['green', 'white'], ['grey', 'navy'], ['ivory', 'green']], fx: ['ringer', 'collar', 'rugby', 'stripes'], motifs: ['letter', 'star'], words: ['varsity', 'campus', 'alumni', 'homecoming', 'class of 98'], tags: ['preppy', 'sporty'] },
+  cottage: { label: 'cottage', pairs: [['ivory', 'green'], ['butter', 'sage'], ['white', 'rose'], ['sage', 'ivory'], ['lilac', 'matcha']], fx: ['knit', 'cable', 'dots', 'buttons'], motifs: ['mushroom', 'flower', 'frog', 'butterfly'], words: ['meadow', 'orchard', 'garden', 'picnic', 'foraged'], tags: ['cute', 'cozy'] },
+  gorp: { label: 'gorpcore', pairs: [['sage', 'rust'], ['olive', 'orange'], ['tan', 'teal'], ['charcoal', 'orange'], ['matcha', 'cocoa']], fx: ['halfzip', 'block', 'chestpocket'], motifs: ['mountain', 'mushroom', 'sun'], words: ['trail', 'summit', 'basecamp', 'switchback', 'ridgeline'], tags: ['sporty', 'cozy'] },
+  ski: { label: '90s ski', pairs: [['teal', 'purple'], ['navy', 'yellow'], ['red', 'white'], ['purple', 'mint'], ['white', 'teal']], fx: ['block', 'raglan', 'fairisle', 'halfzip'], motifs: ['snowflake', 'mountain'], words: ['après', 'powder day', 'lodge', 'black diamond', 'chairlift'], tags: ['sporty', 'cozy'] },
+  cabin: { label: 'cabin', pairs: [['cream', 'rust'], ['cocoa', 'ivory'], ['burgundy', 'cream'], ['olive', 'cream'], ['charcoal', 'butter']], fx: ['cable', 'fairisle', 'knit', 'fuzzy'], motifs: ['snowflake', 'moon'], words: ['fireside', 'hot cocoa', 'woodstove', 'snowed in', 'flannel'], tags: ['cozy'] },
+};
+// what each season's racks are made of: its themes, and how often each cut turns up
+const SEASONS = {
+  summer: { themes: ['surf', 'coquette', 'skate', 'racing'], kinds: { tank: 4, tee: 5, long: 1 } },
+  spring: { themes: ['coquette', 'cottage', 'college', 'skate'], kinds: { tee: 5, long: 3, tank: 1, sweater: 1 } },
+  autumn: { themes: ['grunge', 'college', 'cottage', 'gorp'], kinds: { long: 4, sweater: 3, tee: 2, hoodie: 2 } },
+  winter: { themes: ['ski', 'cabin', 'gorp', 'grunge'], kinds: { sweater: 5, hoodie: 3, long: 3 } },
+};
+// the cut's name on the tag, by kind, and by the detail that makes it
+const CUTS = { tank: ['tank', 'cami', 'baby tank'], tee: ['baby tee', 'boxy tee', 'tee', 'oversized tee'], long: ['long sleeve', 'thermal', 'layering tee'], sweater: ['knit', 'crewneck', 'sweater'], hoodie: ['hoodie', 'zip hoodie'] };
+const CUT_BY_FX = { ringer: 'ringer', raglan: 'raglan', rugby: 'rugby', collar: 'polo', halfzip: 'quarter zip', cable: 'cable knit', fairisle: 'fair isle', buttons: 'cardigan' };
+const FEEL = ['washed', 'vintage', 'faded', 'thrifted', 'oversized', 'sun-bleached', 'deadstock', 'secondhand'];
+const RACK_SIZE = 9;
+// each season's letter in a piece's id
+const CODE = { spring: 'p', summer: 's', autumn: 'a', winter: 'w' }, SEASON_OF = { p: 'spring', s: 'summer', a: 'autumn', w: 'winter' };
+
+const rngOf = seed => { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+const pickW = (r, weights) => { const e = Object.entries(weights), n = e.reduce((s, [, w]) => s + w, 0); let x = r() * n; for (const [k, w] of e) { if ((x -= w) < 0) return k; } return e[0][0]; };
+
+/** The week's theme for a season (it moves on every week, never twice running). */
+export const thriftTheme = (week, season) => { const t = SEASONS[season].themes; return THEMES[t[((week % t.length) + t.length) % t.length]]; };
+
+/** One top on the rack, made up from its week, season and place on the rack. */
+function makeTop(week, season, slot) {
+  const th = thriftTheme(week, season), r = rngOf(week * 7919 + slot * 104729 + 'psaw'.indexOf(CODE[season]) * 15485863 + 17);
+  const kind = pickW(r, SEASONS[season].kinds), [base, acc] = pick(r, th.pairs);
+  // a pattern, a graphic, or both: never plain
+  const fx = [], roll = r();
+  const pattern = roll < 0.75 ? pick(r, th.fx) : null, motif = roll > 0.35 || !pattern ? pick(r, th.motifs) : null;
+  if (pattern) fx.push(pattern);
+  if (motif) fx.push(motif === 'letter' ? 'letter' : 'motif:' + motif);
+  if (kind === 'hoodie' && !fx.includes('halfzip') && r() < 0.4) fx.push('zip');
+  const cut = (pattern && CUT_BY_FX[pattern] && kind !== 'tank' && kind !== 'hoodie') ? CUT_BY_FX[pattern] : pick(r, CUTS[kind]);
+  const art = motif && motif !== 'letter' ? (motif === 'eightball' ? '8-ball' : motif) : pattern && !CUT_BY_FX[pattern] ? ({ tiedye: 'tie-dye', check: 'checker', block: 'colour-block', armstripe: 'track', sidestripe: 'track', frayed: 'distressed', dots: 'polka', knit: 'waffle', fuzzy: 'mohair', chestpocket: 'utility', plaid: 'plaid', stripes: 'striped', letter: 'collegiate', zip: 'zip' })[pattern] : null;
+  const lead = r() < 0.5 ? pick(r, FEEL) : pick(r, th.words);
+  const name = [lead, art, cut].filter(Boolean).join(' ');
+  return { id: `thrift-${week}-${CODE[season]}-${slot}`, kind, name, base, acc, fx, tags: th.tags, dept: 'all', colors: [base], thrift: { week, season, theme: th.label } };
+}
+
+/** This week's rack for a season: no two the same, no colour more than twice, no look (cut and details) twice, so the
+ * rack reads as a mix rather than a stack of one thing. */
+export function thriftRack(week, season) {
+  const names = new Set(), looks = new Set(), bases = {};
+  const rack = [];
+  for (let slot = 0; rack.length < RACK_SIZE && slot < RACK_SIZE * 8; slot++) {
+    const it = makeTop(week, season, slot), look = it.kind + it.fx.join();
+    if (names.has(it.name) || looks.has(look) || (bases[it.base] ?? 0) >= 2) continue;
+    names.add(it.name); looks.add(look); bases[it.base] = (bases[it.base] ?? 0) + 1; rack.push(it);
+  }
+  return rack;
+}
+
+/** A thrift piece from its id (thrift-<week>-<season letter>-<slot>), or null. */
+export function thriftItem(id) {
+  const m = /^thrift-(-?\d+)-([psaw])-(\d+)$/.exec(id);
+  return m ? makeTop(+m[1], SEASON_OF[m[2]], +m[3]) : null;
+}
+
+
+// ---- maison snugé ---------------------------------------------------------------------------------------------------
+// The boutique, for anyone. Each week: one of each extra (a bag, a hat, glasses, a chain, headphones), made up from the
+// week like the thrift rack (fur ones in winter), and three statement pieces from the season's capsule, turning over
+// week by week. Everyone sees the same drop, and a piece keeps working after it's gone.
+
+// for each extra: its cuts, each with the detail that makes it, the seasons it's out (p s a w, or * all year), and its
+// own materials or colourways where the kind's usual ones don't fit; then the kind's usual materials and colourways
+const MAISON_KINDS = {
+  bag: {
+    cuts: [
+      { cut: 'crossbody', fx: [], when: '*' }, { cut: 'chain bag', fx: ['chain'], when: '*' },
+      { cut: 'quilted crossbody', fx: ['quilt'], when: 'aw' }, { cut: 'tote', fx: ['tote'], when: 'ps' },
+      { cut: 'mini backpack', fx: ['backpack'], when: 'pa' }, { cut: 'saddle bag', fx: [], when: 'a', mats: ['suede', 'tan leather'] },
+      { cut: 'basket bag', fx: ['basket'], when: 's', mats: ['woven', 'raffia'], pairs: [['tan', null], ['cream', null]] },
+      { cut: 'shearling tote', fx: ['tote', 'fur'], when: 'w', mats: [], pairs: [['cream', null], ['mocha', null]], fur: true },
+      { cut: 'faux fur bag', fx: ['fur'], when: 'w', mats: [], pairs: [['pearl', 'gold'], ['mocha', 'gold'], ['black', 'silver']], fur: true },
+    ],
+    materials: ['leather', 'suede', 'nylon', 'canvas'], pairs: [['black', 'gold'], ['camel', 'gold'], ['mocha', 'silver'], ['cream', 'gold'], ['olive', 'silver'], ['burgundy', 'gold']],
+  },
+  hat: {
+    cuts: [
+      { cut: 'bucket hat', fx: [], when: '*' }, { cut: 'cap', fx: ['cap'], when: '*' },
+      { cut: 'visor', fx: ['visor'], when: 's', mats: ['terry', 'nylon'] },
+      { cut: 'bandana', fx: ['bandana'], when: 's', mats: ['silk', 'paisley'], pairs: [['red', 'white'], ['navy', 'white'], ['sage', 'cream'], ['black', 'cream']] },
+      { cut: 'earmuffs', fx: ['earmuffs'], when: 'w', mats: ['faux fur', 'shearling'], pairs: [['cream', null], ['pearl', null], ['mocha', null]], fur: true },
+      { cut: 'trapper hat', fx: ['trapper'], when: 'w', mats: ['shearling'], pairs: [['mocha', 'ivory'], ['black', 'cream'], ['camel', 'ivory']], fur: true },
+    ],
+    materials: ['suede', 'wool', 'corduroy', 'nylon', 'canvas'], pairs: [['cream', 'mocha'], ['black', 'cream'], ['camel', 'cream'], ['olive', 'cream'], ['navy', 'cream'], ['mocha', 'ivory']],
+  },
+  glasses: {
+    cuts: [{ cut: 'frames', fx: [], when: '*' }, { cut: 'tinted frames', fx: ['tint'], when: 'ps', pairs: [['gold', 'pink'], ['silver', 'sky'], ['tortoise', 'butter']] }],
+    materials: ['tortoiseshell', 'wire-rim', 'clear acetate', 'black acetate'], pairs: [['tortoise', null], ['gold', null], ['pearl', null], ['black', null], ['silver', null]],
+  },
+  chain: {
+    cuts: [
+      { cut: 'chain', fx: [], when: '*' }, { cut: 'pendant chain', fx: ['pendant'], when: '*' },
+      { cut: 'pearl strand', fx: [], when: 'p', mats: [], pairs: [['pearl', null]] },
+      { cut: 'puka shell necklace', fx: ['shells'], when: 's', mats: [], pairs: [['pearl', null]] },
+      { cut: 'beaded necklace', fx: ['beads'], when: 's', mats: [], pairs: [['pearl', null]] },
+      { cut: 'locket', fx: ['pendant'], when: 'a', mats: ['gold', 'silver'], pairs: [['gold', 'gold'], ['silver', 'silver']] },
+      { cut: 'chunky chain', fx: [], when: 'w', mats: ['gold', 'silver'], pairs: [['gold', 'gold'], ['silver', 'silver']] },
+    ],
+    materials: ['gold rope', 'silver box', 'gold curb'], pairs: [['gold', 'gold'], ['silver', 'silver']],
+  },
+  headphones: {
+    cuts: [
+      { cut: 'headphones', fx: [], when: '*' }, { cut: 'wired earbuds', fx: ['earbuds'], when: 'ps', mats: [], pairs: [['white', null]] },
+      { cut: 'earmuff headphones', fx: ['fuzzy'], when: 'w', mats: [], pairs: [['cream', null], ['mocha', null]] },
+    ],
+    materials: ['matte', 'chrome', 'cream', 'olive', 'suede'], pairs: [['black', null], ['chrome', null], ['cream', null], ['olive', null], ['camel', null]],
+  },
+};
+const MAISON_SLOTS = ['bag', 'hat', 'glasses', 'chain', 'headphones'];
+// materials that are really a colour (glasses frames, chains, headphones)
+const MATERIAL_COLOUR = { tortoiseshell: 'tortoise', 'wire-rim': 'gold', 'clear acetate': 'pearl', 'black acetate': 'black', 'gold rope': 'gold', 'silver box': 'silver', 'gold curb': 'gold', gold: 'gold', silver: 'silver', matte: 'black', chrome: 'chrome' };
+
+// each season's capsule of statement pieces, worn when the weather calls for that kind of piece
+// [id, kind, name, base colour, accent colour, details]
+const CAPSULES = {
+  autumn: [
+    ['maison-bronze-bomber', 'light', 'metallic bronze bomber', 'bronze', null, ['closed', 'zip', 'metallic']],
+    ['maison-cashmere-cardigan', 'sweater', 'gold-button cashmere cardigan', 'camel', null, ['goldbuttons', 'knit']],
+    ['maison-shearling', 'light', 'shearling jacket', 'mocha', 'ivory', ['fur', 'closed']],
+    ['maison-sequin-crew', 'sweater', 'sequin knit', 'burgundy', null, ['sequin']],
+    ['maison-leather-jacket', 'light', 'leather jacket', 'black', null, ['closed', 'zip', 'metallic']],
+    ['maison-mohair-cardigan', 'sweater', 'mohair cardigan', 'olive', null, ['fuzzy', 'buttons']],
+  ],
+  winter: [
+    ['maison-holo-puffer', 'coat', 'holographic puffer', 'silver', null, ['quilt', 'holo']],
+    ['maison-fur-coat', 'coat', 'faux fur coat', 'champagne', null, ['fuzzy', 'fur']],
+    ['maison-sequin-turtleneck', 'long', 'sequin turtleneck', 'black', null, ['turtleneck', 'sequin']],
+    ['maison-chocolate-fur', 'coat', 'chocolate fur coat', 'mocha', null, ['fuzzy', 'fur']],
+    ['maison-fur-boots', 'shoe', 'fur-lined boots', 'camel', 'ivory', ['boot', 'furtrim']],
+    ['maison-fur-stole', 'scarf', 'faux fur stole', 'pearl', null, ['fuzzy']],
+  ],
+  spring: [
+    ['maison-iri-windbreaker', 'light', 'iridescent windbreaker', 'lilac', null, ['closed', 'zip', 'holo']],
+    ['maison-trench', 'rain', 'cotton trench', 'camel', null, ['belt', 'double']],
+    ['maison-satin-bomber', 'light', 'satin bomber', 'champagne', null, ['closed', 'zip', 'metallic']],
+    ['maison-silk-shirt', 'long', 'silk shirt', 'ivory', null, ['placket', 'linen']],
+  ],
+  summer: [
+    ['maison-sequin-tank', 'tank', 'sequin tank', 'black', null, ['sequin']],
+    ['maison-holo-tee', 'tee', 'holographic tee', 'silver', null, ['holo']],
+    ['maison-camp-shirt', 'long', 'linen camp shirt', 'ivory', null, ['linen', 'collar']],
+    ['maison-crochet-tank', 'tank', 'crochet tank', 'cream', null, ['knit']],
+  ],
+};
+export const CAPSULE_ITEMS = Object.values(CAPSULES).flat().map(([id, kind, name, base, acc, fx]) => ({ id, kind, name, base, acc, fx, tags: ['luxe'], dept: 'all', colors: [base] }));
+
+function makeExtra(week, slot, season) {
+  const kind = MAISON_SLOTS[slot], K = MAISON_KINDS[kind], code = CODE[season], r = rngOf(week * 6007 + slot * 92821 + 'psaw'.indexOf(code) * 15485863 + 3);
+  const out = K.cuts.filter(c => c.when === '*' || c.when.includes(code));
+  // the season's own cuts come up twice as often; winter always has something fur (a hat one week, a bag the next)
+  const furs = out.filter(c => c.fur), furWeek = furs.length && (kind === 'hat' ? week % 2 === 0 : week % 2 !== 0);
+  const c = furWeek ? pick(r, furs) : pick(r, out.flatMap(c => (c.when === '*' ? [c] : [c, c])));
+  const mats = c.mats ?? K.materials, material = mats.length ? pick(r, mats) : null;
+  let [base, acc] = pick(r, c.pairs ?? K.pairs);
+  if (material && MATERIAL_COLOUR[material] && !c.pairs) base = MATERIAL_COLOUR[material];
+  if (c.cut === 'locket' || c.cut === 'chunky chain') base = acc = material;
+  // a special finish on about half of them (never on things that are already the point: fur, shells, beads, baskets,
+  // earbuds); chrome is always iridescent
+  const plain = c.fur || ['shells', 'beads', 'basket', 'earbuds'].some(f => c.fx.includes(f));
+  const roll = r(), fin = plain ? null : material === 'chrome' ? 'holo' : roll < 0.2 ? 'holo' : roll < 0.35 ? 'metallic' : roll < 0.48 && (kind === 'bag' || kind === 'hat') ? 'sequin' : null;
+  const word = { holo: 'iridescent', metallic: 'metallic', sequin: 'sequin' }[fin];
+  const name = fin ? `${word} ${c.cut}` : material ? `${material} ${c.cut}` : c.cut;
+  return { id: `maison-${week}-${code}-${slot}`, kind, name, base, acc, fx: fin ? [...c.fx, fin] : [...c.fx], tags: ['luxe'], dept: 'all', colors: [base] };
+}
+
+/** This week's drop at maison snugé for a season: one of each extra, and three of the season's capsule. */
+export function maisonDrop(week, season) {
+  const extras = MAISON_SLOTS.map((_, slot) => makeExtra(week, slot, season));
+  const cap = CAPSULES[season], at = ((week % cap.length) + cap.length) % cap.length;
+  const pieces = [...cap.slice(at), ...cap.slice(0, at)].slice(0, 3).map(([id]) => CAPSULE_ITEMS.find(c => c.id === id));
+  return { extras, pieces };
+}
+
+/** A boutique extra from its id (maison-<week>-<season letter>-<slot>), or null. */
+export function maisonItem(id) {
+  const m = /^maison-(-?\d+)-([psaw])-(\d+)$/.exec(id);
+  return m && +m[3] < MAISON_SLOTS.length ? makeExtra(+m[1], +m[3], SEASON_OF[m[2]]) : null;
 }

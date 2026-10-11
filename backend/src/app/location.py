@@ -52,7 +52,7 @@ async def resolve(client: httpx.AsyncClient, q: str | None, lat: float | None, l
     if not results:
         raise LocationNotFound(f'no place called {q!r}')
     r = results[0]  # geocoding results come sorted by relevance/population
-    return Location(name=_display(r), lat=r['latitude'], lon=r['longitude'])
+    return Location(name=_display(r), lat=r['latitude'], lon=r['longitude'], cc=r.get('country_code'))
 
 
 async def search(client: httpx.AsyncClient, q: str, limit: int = 6) -> list[Location]:
@@ -70,7 +70,7 @@ async def search(client: httpx.AsyncClient, q: str, limit: int = 6) -> list[Loca
                    or (r.get('country_code') or '').lower() == want or (full and (r.get('admin1') or '').lower() == full)]
     seen, out = set(), []
     for r in results:
-        loc = Location(name=_display(r), lat=r['latitude'], lon=r['longitude'])
+        loc = Location(name=_display(r), lat=r['latitude'], lon=r['longitude'], cc=r.get('country_code'))
         if loc.name not in seen:
             seen.add(loc.name)
             out.append(loc)

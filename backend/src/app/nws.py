@@ -7,7 +7,7 @@ precipitation, temps, wind and gusts, which is what we need (the text forecasts 
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -78,7 +78,8 @@ def sky(cover: float) -> Condition:
     return 'clear' if cover <= 25 else 'partly' if cover <= 62 else 'cloudy' if cover <= 87 else 'overcast'
 
 
-async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
+async def get_weather(client: httpx.AsyncClient, loc: Location, day: date | None = None, day_start: int = 8) -> Weather:
+    """Right now and the next 11 hours, or with `day` that local date from `day_start` o'clock."""
     key = (round(loc.lat, 4), round(loc.lon, 4))
     if key not in _points:
         _points[key] = await _get(client, f'https://api.weather.gov/points/{key[0]},{key[1]}')
@@ -95,7 +96,7 @@ async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
                                        'maxTemperature', 'minTemperature')}
     tz = ZoneInfo(pt['timeZone'])
     now = datetime.now(tz)
-    start = now.replace(minute=0, second=0, microsecond=0)
+    start = now.replace(minute=0, second=0, microsecond=0) if day is None else datetime.combine(day, dtime(day_start), tz)
 
     def hour(t: datetime) -> HourWeather:
         temp = _at(S['temperature'], t)
@@ -132,10 +133,12 @@ async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
     hourly = [hour(start + timedelta(hours=k)) for k in range(12)]
     now_h = hourly[0]
     temps = [h.temp for h in hourly]
-    hi, lo = _at(S['maxTemperature'], now), _at(S['minTemperature'], now)
+    at = now if day is None else start
+    hi, lo = _at(S['maxTemperature'], at), _at(S['minTemperature'], at)
+    light = dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon, now)), dark=sun.down(loc.lat, loc.lon, now)) if day is None else {'night': False, 'day': True}
     return Weather(
-        **now_h.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=now.strftime('%Y-%m-%dT%H:%M'),
-        dir=_at(S['windDirection'], start, 0), **dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon, now))),
+        **now_h.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=at.strftime('%Y-%m-%dT%H:%M'),
+        dir=_at(S['windDirection'], start, 0), **light,
         lo=round(min(temps + ([C_TO_F(lo)] if lo is not None else [])), 1), hi=round(max(temps + ([C_TO_F(hi)] if hi is not None else [])), 1),
         hourly=hourly, source='nws',
     )

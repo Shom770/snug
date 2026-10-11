@@ -43,6 +43,7 @@ class Location(BaseModel):
     name: str  # display name, e.g. "Philadelphia, PA"
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
+    cc: str | None = None  # country code, e.g. "FR" (from the place search)
 
 
 class Weather(HourWeather):
@@ -56,6 +57,8 @@ class Weather(HourWeather):
     dir: float  # degrees the wind comes from
     night: bool  # after civil dusk / before civil dawn (see sun.py)
     golden: bool = False  # the sun low on the horizon: sunset (or sunrise) light
+    dark: bool = False  # the sun is down (after sunset, before sunrise); civil dusk (night) comes a little later
+    day: bool = False  # a whole day's forecast from 8am (tomorrow's outfit), not right now
     hourly: list[HourWeather] = Field(min_length=1, max_length=12)  # starts with the current hour
     source: Literal['nws', 'open-meteo'] = 'open-meteo'
 

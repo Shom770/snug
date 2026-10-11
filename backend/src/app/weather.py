@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -15,6 +15,7 @@ CURRENT = 'temperature_2m,apparent_temperature,relative_humidity_2m,cloud_cover,
 HOURLY = 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,cloud_cover,weather_code,precipitation,precipitation_probability'
 LAYERS = 'cloud_cover_low,cloud_cover_mid,cloud_cover_high,sunshine_duration,is_day'
 SKY = ('clear', 'partly', 'cloudy', 'overcast')
+DAY_START = 8  # a whole day's forecast (for tomorrow's outfit) runs from 8am, 12 hours
 CIRRUS = 0.4  # how much the cloud the sun shines through counts toward how cloudy the sky is called
 
 INTENSITY_BY_CODE = {51: 0.2, 53: 0.4, 55: 0.6, 61: 0.3, 63: 0.55, 65: 0.85, 80: 0.4, 81: 0.6, 82: 0.9, 71: 0.3, 73: 0.55, 75: 0.85, 77: 0.25,
@@ -44,7 +45,9 @@ def condition_from_wmo(code: int, wind: float = 0, feels: float = 60, humidity: 
 def sun_cover(h: HourWeather) -> float:
     """% of the sky hiding the sun: low and mid cloud (thin high cirrus lets it through), never more than the total, and
     in daylight no more than the share of the hour the sun was blocked (models often call a thin veil 100% cloud)."""
-    cover = h.clouds if h.cloudLow is None or h.cloudMid is None else min(h.clouds, 100 * (1 - (1 - h.cloudLow / 100) * (1 - h.cloudMid / 100)))
+    # layers that are all empty under a cloudy total are missing (another source's total), not clear: go by the total
+    missing = h.cloudLow is None or h.cloudMid is None or (h.cloudLow + h.cloudMid + (h.cloudHigh or 0) == 0 and h.clouds >= 20)
+    cover = h.clouds if missing else min(h.clouds, 100 * (1 - (1 - h.cloudLow / 100) * (1 - h.cloudMid / 100)))
     return cover if h.sunshine is None else min(cover, 100 - h.sunshine)
 
 
@@ -76,15 +79,20 @@ def _hour(time: str, code: int, temp: float, feels: float, humidity: float, wind
     return h
 
 
-async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
+async def _nothing() -> None:
+    return None
+
+
+async def get_weather(client: httpx.AsyncClient, loc: Location, day: date | None = None) -> Weather:
+    """Right now and the next 11 hours, or with `day` that local date from DAY_START (raises ValueError past the forecast)."""
     try:
-        w = await nws.get_weather(client, loc)
+        w = await nws.get_weather(client, loc, day, DAY_START)
     except nws.NwsUnavailable as e:
         log.info('nws unavailable for %s, using open-meteo: %s', loc.name, e)
-        return await open_meteo(client, loc)
+        return await open_meteo(client, loc, day)
     # NWS gives only total cover; take the layers and sunshine from Open-Meteo's model, and the layers from the
     # station's METAR for right now
-    layers, now = await asyncio.gather(cloud_layers(client, loc.lat, loc.lon), nws.current_layers(client, loc))
+    layers, now = await asyncio.gather(cloud_layers(client, loc.lat, loc.lon), nws.current_layers(client, loc) if day is None else _nothing())
     start = datetime.fromisoformat(w.time).replace(minute=0)
     for k, h in enumerate(w.hourly):
         h.cloudLow, h.cloudMid, h.cloudHigh, h.sunshine = layers.get((start + timedelta(hours=k)).strftime('%Y-%m-%dT%H'), (None, None, None, None))
@@ -97,10 +105,10 @@ async def get_weather(client: httpx.AsyncClient, loc: Location) -> Weather:
     return w
 
 
-async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
+async def open_meteo(client: httpx.AsyncClient, loc: Location, day: date | None = None) -> Weather:
     res = await client.get('https://api.open-meteo.com/v1/forecast', params={
         'latitude': loc.lat, 'longitude': loc.lon, 'current': CURRENT, 'hourly': HOURLY + ',' + LAYERS, 'daily': 'temperature_2m_max,temperature_2m_min',
-        'temperature_unit': 'fahrenheit', 'wind_speed_unit': 'mph', 'precipitation_unit': 'inch', 'forecast_days': 2, 'timezone': 'auto',
+        'temperature_unit': 'fahrenheit', 'wind_speed_unit': 'mph', 'precipitation_unit': 'inch', 'forecast_days': 3, 'timezone': 'auto',
     }, timeout=10)
     res.raise_for_status()
     r = res.json()
@@ -109,6 +117,8 @@ async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
     # from the previous hour just after it turns
     local_now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=r.get('utc_offset_seconds', 0))
     hour_now = max(local_now.strftime('%Y-%m-%dT%H'), c['time'][:13])
+    if day is not None:
+        return _om_day(r, loc, day)
     i0 = next((i for i, t in enumerate(h['time']) if t >= hour_now), 0)
     hourly = [
         _hour(h['time'][i], h['weather_code'][i], h['temperature_2m'][i], h['apparent_temperature'][i], h['relative_humidity_2m'][i],
@@ -125,8 +135,26 @@ async def open_meteo(client: httpx.AsyncClient, loc: Location) -> Weather:
     hourly[0] = now
     temps = [x.temp for x in hourly]
     return Weather(
-        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=max(c['time'], hour_now + ':00'), dir=c['wind_direction_10m'], **dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon))),
+        **now.model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=max(c['time'], hour_now + ':00'), dir=c['wind_direction_10m'], **dict(zip(('night', 'golden'), sun.phase(loc.lat, loc.lon))), dark=sun.down(loc.lat, loc.lon),
         lo=round(min(r['daily']['temperature_2m_min'][0], *temps), 1), hi=round(max(r['daily']['temperature_2m_max'][0], *temps), 1),
+        hourly=hourly, source='open-meteo',
+    )
+
+
+def _om_day(r: dict, loc: Location, day: date) -> Weather:
+    """One local date from DAY_START, out of an Open-Meteo response."""
+    h, d = r['hourly'], r['daily']
+    i0, di = h['time'].index(f'{day}T{DAY_START:02d}:00'), d['time'].index(str(day))
+    hourly = [
+        _hour(h['time'][i], h['weather_code'][i], h['temperature_2m'][i], h['apparent_temperature'][i], h['relative_humidity_2m'][i],
+              h['wind_speed_10m'][i], h['wind_gusts_10m'][i], h['cloud_cover'][i], h['precipitation'][i], h['precipitation_probability'][i],
+              _layers(h, i))
+        for i in (min(i0 + k, len(h['time']) - 1) for k in range(12))
+    ]
+    temps = [x.temp for x in hourly]
+    return Weather(
+        **hourly[0].model_dump(), city=loc.name, lat=loc.lat, lon=loc.lon, time=f'{day}T{DAY_START:02d}:00', dir=r['current']['wind_direction_10m'],
+        night=False, day=True, lo=round(min(d['temperature_2m_min'][di], *temps), 1), hi=round(max(d['temperature_2m_max'][di], *temps), 1),
         hourly=hourly, source='open-meteo',
     )
 
@@ -136,7 +164,7 @@ async def cloud_layers(client: httpx.AsyncClient, lat: float, lon: float) -> dic
     total (NWS)."""
     try:
         res = await client.get('https://api.open-meteo.com/v1/forecast', params={
-            'latitude': lat, 'longitude': lon, 'hourly': LAYERS, 'forecast_days': 2, 'timezone': 'auto'}, timeout=8)
+            'latitude': lat, 'longitude': lon, 'hourly': LAYERS, 'forecast_days': 3, 'timezone': 'auto'}, timeout=8)
         res.raise_for_status()
         h = res.json()['hourly']
         return {t[:13]: _layers(h, i) for i, t in enumerate(h['time'])}

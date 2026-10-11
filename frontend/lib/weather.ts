@@ -105,12 +105,14 @@ export function buildPreset(input: WeatherInput, outfitFor?: OutfitFn): BuildRes
   // the sun was shining through, doesn't). Only a near-complete deck (88%+) is the grey ceiling with no sun; below that
   // the renderer draws that share of the sky as clouds, so mostly cloudy still has gaps and glimpses of sun.
   let cond: SceneCond = sc.cond;
-  const opaque = sunCover(w);
+  // by night there's no sun for thin cloud to let through: all of the cloud is cloud
+  const opaque = w.night ? w.clouds : sunCover(w);
   if (SKY_ONLY.includes(w.condition)) {
     cond = opaque >= 88 ? 'overcast' : opaque >= 20 || w.clouds >= 40 ? 'partly' : 'sunny';
   }
   const clearish = cond === 'sunny' || cond === 'partly';
-  if (clearish && w.night) cond = 'night';
+  // a clear night is the starry one; a partly cloudy night keeps its clouds, drawn in the night's colours
+  if (cond === 'sunny' && w.night) cond = 'night';
   else if (clearish && w.golden) cond = 'sunset'; // sun low on the horizon (backend's sun position): sunset or sunrise light
   let act: Activity = 'stand';
   if (score >= 78 && cond === 'night' && w.clouds < 35) act = 'stargaze';

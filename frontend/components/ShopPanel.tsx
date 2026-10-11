@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CP, CREAM, INK, LIGHT, PLANK, WOOD, WOOD_TEX } from './auth';
 import type { Avatar, Outfit, Piece } from './CharacterPanel';
-import { AV_DEFAULT, ITEMS, KITS, itemSprite, kitWardrobe, sprite } from '../lib/engine';
+import { AV_DEFAULT, ITEM, ITEMS, KITS, itemSprite, kitWardrobe, sprite } from '../lib/engine';
 
 interface Item { id: string; kind: string; name: string; base: string; acc: string | null; fx: string[]; tags: string[]; dept: 'all' | 'girls'; colors: string[] }
 const CATALOG = ITEMS as Item[];
@@ -38,7 +38,11 @@ const STYLE_FIT: Outfit = { top: 'tee', outer: 'light', bottom: 'pants', acc: []
 type Pick = Piece & { kind: string };
 const same = (a: Piece, b: Piece) => a.id === b.id && (a.c ?? null) === (b.c ?? null);
 const asList = (v: Piece | Piece[] | undefined): Piece[] => (!v ? [] : Array.isArray(v) ? v : [v]);
-const nameOf = (p: Piece) => (p.id && BY_ID[p.id]?.name) || 'piece';
+// thrift and boutique pieces aren't on these shelves, but the closet knows them by id too
+const nameOf = (p: Piece) => (p.id && (BY_ID[p.id] ?? (ITEM as Record<string, Item | undefined>)[p.id])?.name) || 'piece';
+// the closet shows everything snug owns: the aisles' kinds, and the extras from maison snugé
+const EXTRA_KINDS = new Set(['bag', 'hat', 'glasses', 'chain', 'headphones']);
+const CLOSET = [...AISLES, { kind: 'bag', label: 'bags' }, { kind: 'hat', label: 'hats' }, { kind: 'glasses', label: 'glasses' }, { kind: 'chain', label: 'chains' }, { kind: 'headphones', label: 'headphones' }];
 
 const btn: CSSProperties = { padding: '6px 8px', background: 'rgba(30,18,8,0.55)', color: LIGHT, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap', flex: 'none' };
 const Plank = ({ onClick, children, disabled, wide }: { onClick: () => void; children: ReactNode; disabled?: boolean; wide?: boolean }) => (
@@ -117,14 +121,16 @@ function ColourCards({ item, av, index, onIndex }: { item: Item; av: (p: Piece) 
  * snug & co., a general store: walk the aisles, pick pieces off the shelves, swipe through their colours, fill the
  * cart, check out. snug can own several of each kind and rotates through them day to day.
  */
-export default function ShopPanel({ initial, onDone, onClose }: { initial?: Partial<Avatar> | null; onDone: (a: Avatar) => void; onClose: () => void }) {
+export default function ShopPanel({ initial, onDone, onClose, closetFirst }: { initial?: Partial<Avatar> | null; onDone: (a: Avatar) => void; onClose: () => void; closetFirst?: boolean }) {
   const base: Avatar = { ...(AV_DEFAULT as Avatar), ...(initial || {}) };
   const start = useMemo(() => Object.fromEntries(Object.entries(initial?.wardrobe || {}).map(([k, v]) => [k, asList(v)])), [initial]);
   const [closet, setCloset] = useState<Record<string, Piece[]>>(start);
+  // the extras they're wearing (one of each kind at most), picked in the closet
+  const [extras, setExtras] = useState<Record<string, string | null>>(initial?.extras ?? {});
   const [kind, setKind] = useState('tee');
   // the department comes from who snug is: girls also see skirts and mary janes
   const dept = base.body === 'girl' ? 'girls' : 'guys';
-  const [view, setView] = useState<'shelves' | 'cart' | 'closet' | 'styles'>(Object.keys(start).length ? 'shelves' : 'styles');
+  const [view, setView] = useState<'shelves' | 'cart' | 'closet' | 'styles'>(closetFirst ? 'closet' : Object.keys(start).length ? 'shelves' : 'styles');
   const [kit, setKit] = useState<string | null>(null);
   // a style's been picked: ask whether to wear it as is or keep shopping on top of it
   const [asking, setAsking] = useState(false);
@@ -142,9 +148,9 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
   const lastOf = (k: string) => [...cart].reverse().find(p => p.kind === k);
   // snug models what's being tried on, else the newest thing in the cart for this aisle, else what they own
   const model = trying ?? lastOf(kind);
-  const preview: Avatar = view === 'styles' && kit ? { ...base, wardrobe: kitOf(kit, base.body) } : { ...base, wardrobe: { ...closet, ...(model ? { [model.kind]: [model] } : {}) } };
+  const preview: Avatar = view === 'styles' && kit ? { ...base, wardrobe: kitOf(kit, base.body) } : { ...base, extras, wardrobe: { ...closet, ...(model ? { [model.kind]: [model] } : {}) } };
   const owned = (k: string) => closet[k] ?? [];
-  const changed = cart.length > 0 || JSON.stringify(closet) !== JSON.stringify(start);
+  const changed = cart.length > 0 || JSON.stringify(closet) !== JSON.stringify(start) || JSON.stringify(extras) !== JSON.stringify(initial?.extras ?? {});
 
   const openItem = (it: Item) => { setOpen(it); setCi(0); };
   const add = () => { if (!trying) return; if (!cart.some(p => p.kind === trying.kind && same(p, trying))) setCart(c => [...c, trying]); setBump(n => n + 1); setOpen(null); };
@@ -152,7 +158,9 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
     const w: Record<string, Piece[]> = Object.fromEntries(Object.entries(from).map(([k, v]) => [k, [...v]]));
     cart.forEach(({ kind: k, ...p }) => { const l = (w[k] ||= []); if (!l.some(q => same(q, p)) && l.length < 12) l.push(p); });
     Object.keys(w).forEach(k => { if (!w[k].length) delete w[k]; });
-    onDone({ ...base, wardrobe: w });
+    // an extra only stays on if it's still in the closet
+    const on = Object.fromEntries(Object.entries(extras).filter(([k, id]) => id && (w[k] ?? []).some(p => p.id === id)));
+    onDone({ ...base, wardrobe: w, extras: on });
   };
   const kitName = KIT_LIST.find(k => k.id === kit)?.label ?? '';
   const wearKit = () => { if (kit) checkout(kitOf(kit, base.body)); };
@@ -274,8 +282,8 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
                   </>
                 ) : (
                   <>
-                    {AISLES.filter(a => owned(a.kind).some(p => p.id)).length === 0 && <div style={{ fontWeight: 700, opacity: 0.7, padding: '8px 0' }}>nothing from the store yet.</div>}
-                    {AISLES.filter(a => owned(a.kind).some(p => p.id)).map(a => (
+                    {CLOSET.filter(a => owned(a.kind).some(p => p.id)).length === 0 && <div style={{ fontWeight: 700, opacity: 0.7, padding: '8px 0' }}>nothing from the store yet.</div>}
+                    {CLOSET.filter(a => owned(a.kind).some(p => p.id)).map(a => (
                       <div key={a.kind} style={{ padding: '6px 0', borderTop: '2px dashed rgba(74,46,22,0.2)' }}>
                         <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.7, marginBottom: 4 }}>{a.label}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -283,6 +291,10 @@ export default function ShopPanel({ initial, onDone, onClose }: { initial?: Part
                             <div key={i} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: 76 }}>
                               <img src={icon(a.kind, look(a.kind, p))} alt="" style={{ width: 52, height: 45, imageRendering: 'pixelated' }} />
                               <span style={{ fontSize: 10.5, fontWeight: 800, textAlign: 'center', lineHeight: 1.1 }}>{nameOf(p)}</span>
+                              {EXTRA_KINDS.has(a.kind) && (() => { const on = extras[a.kind] === p.id; return (
+                                <button onClick={() => setExtras(x => ({ ...x, [a.kind]: on ? null : p.id! }))} aria-pressed={on}
+                                  style={{ marginTop: 3, padding: '2px 8px', background: on ? '#f2c230' : 'rgba(30,18,8,0.12)', color: INK, fontSize: 10.5, fontWeight: 800, clipPath: CP }}>{on ? 'wearing ✓' : 'wear'}</button>
+                              ); })()}
                               <button aria-label={`take the ${nameOf(p)} out of the closet`} onClick={() => setCloset(c => ({ ...c, [a.kind]: owned(a.kind).filter((_, j) => j !== i) }))}
                                 style={{ position: 'absolute', top: -2, right: 6, width: 20, height: 20, background: 'rgba(30,18,8,0.7)', color: LIGHT, fontSize: 12, fontWeight: 800, clipPath: CP }}>×</button>
                             </div>

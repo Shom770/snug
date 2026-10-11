@@ -25,6 +25,7 @@ export interface SnugProps {
   onCheckin?: (c: { felt: number; fit: string | null }) => Promise<void>;
   /** opens snug's shop (the "go shopping" button under what to wear) */
   onShop?: () => void;
+  onCloset?: () => void;
   /** how snug looks (skin, hair, style...); see CharacterPanel */
   avatar?: { skin: string; body: 'boy' | 'girl'; hair: string; hairColor: string; style: string; skirt: boolean } | null;
   /** tonight's saved check-in, if any; the check-in card shows it as done */

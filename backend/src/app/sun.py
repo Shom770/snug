@@ -23,6 +23,11 @@ def elevation(lat: float, lon: float, t: datetime) -> float:
     return 90 - math.degrees(math.acos(max(-1, min(1, cos_zen))))
 
 
+def down(lat: float, lon: float, t: datetime | None = None) -> bool:
+    """The sun has set (or not yet risen) at the place: its top edge below the horizon."""
+    return elevation(lat, lon, t or datetime.now(timezone.utc)) < -0.83
+
+
 def phase(lat: float, lon: float, t: datetime | None = None) -> tuple[bool, bool]:
     """(night, golden) right now at the place."""
     e = elevation(lat, lon, t or datetime.now(timezone.utc))

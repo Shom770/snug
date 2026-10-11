@@ -86,8 +86,10 @@ const pick = <T,>(arr: T[], seed: number): T => arr[Math.abs(seed) % arr.length]
 
 /** % of the sky hiding the sun: low and mid cloud (thin high cirrus lets it through), never more than the total, and in
  * daylight no more than the share of the hour the sun was blocked. Same as the backend's sun_cover(). */
-export function sunCover(w: Pick<NormalizedWeather, 'clouds' | 'cloudLow' | 'cloudMid' | 'sunshine'>): number {
-  const cover = w.cloudLow != null && w.cloudMid != null ? Math.min(w.clouds, 100 * (1 - (1 - w.cloudLow / 100) * (1 - w.cloudMid / 100))) : w.clouds;
+export function sunCover(w: Pick<NormalizedWeather, 'clouds' | 'cloudLow' | 'cloudMid' | 'cloudHigh' | 'sunshine'>): number {
+  // layers that are all empty under a cloudy total are missing, not clear: go by the total
+  const layered = w.cloudLow != null && w.cloudMid != null && !(w.cloudLow + w.cloudMid + (w.cloudHigh ?? 0) === 0 && w.clouds >= 20);
+  const cover = layered ? Math.min(w.clouds, 100 * (1 - (1 - w.cloudLow! / 100) * (1 - w.cloudMid! / 100))) : w.clouds;
   return w.sunshine != null ? Math.min(cover, 100 - w.sunshine) : cover;
 }
 
