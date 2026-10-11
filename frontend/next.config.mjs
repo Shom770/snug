@@ -8,7 +8,9 @@ const nextConfig = process.env.STATIC_EXPORT
       reactStrictMode: false,
       distDir: process.env.NODE_ENV === 'development' ? '.next-dev' : '.next',
       async rewrites() {
-        return [{ source: '/backend/:path*', destination: `${process.env.BACKEND_URL || 'http://127.0.0.1:8787'}/:path*` }];
+        const api = process.env.BACKEND_URL || 'http://127.0.0.1:8787';
+        // /f/<code> is a friend's link, which the API serves (with its preview), as the Worker does in production
+        return [{ source: '/backend/:path*', destination: `${api}/:path*` }, { source: '/f/:path*', destination: `${api}/f/:path*` }];
       },
     };
 export default nextConfig;

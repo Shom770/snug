@@ -21,8 +21,9 @@ const ICONS = {
   thrift: ['   ##   ', '   #    ', '  ####  ', ' #oooo# ', '#oooooo#', '########', '        '],
   boutique: [' ###### ', '#oooooo#', '#o#oo#o#', '#oo##oo#', '#o#oo#o#', '#oooooo#', ' ###### '],
   plane: ['    #   ', '    ##  ', '#   ###o', '########', '#   ###o', '    ##  ', '    #   '],
+  park: [' ##  ## ', '#oo##oo#', ' ##  ## ', '#oo##oo#', '#oo##oo#', '#oo##oo#', '########'], // two friends
 };
-const ICON_COLOUR: Record<keyof typeof ICONS, string> = { home: '#e7a93b', chair: '#c98d5a', thrift: '#7fb07a', boutique: '#3f6b58', plane: '#5b8def' };
+const ICON_COLOUR: Record<keyof typeof ICONS, string> = { home: '#e7a93b', chair: '#c98d5a', thrift: '#7fb07a', boutique: '#3f6b58', plane: '#5b8def', park: '#5c9150' };
 
 // ---------- pixel drawing ----------
 

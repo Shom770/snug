@@ -11,6 +11,7 @@
   GET  /me, PUT /me/prefs, GET|POST /checkins
   GET  /places?q=        -> location suggestions for the place picker;  GET /places/reverse?lat=&lon= -> a name for coordinates
   GET  /trip             -> ?lat=&lon=&name=&start=&end= : each day of a trip there, and what snug would wear (the airport)
+  /friends/*, /mailbox   -> friends on each other's streets (see friends.py)
 """
 
 from . import config  # noqa: F401  (loads .env first)
@@ -23,7 +24,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import account, auth, jev, tuning
+from . import account, auth, friends, jev, tuning
 from .db import Database, Row, get_db, utcnow
 from .descriptors import band_of
 from .forecast import forecast, no_rain_gear
@@ -44,6 +45,7 @@ app.add_middleware(CORSMiddleware, allow_origin_regex=r'http://(localhost|127\.0
 app.include_router(auth.router)
 app.include_router(account.router)
 app.include_router(tuning.router)
+app.include_router(friends.router)
 
 
 @app.get('/health')
@@ -129,6 +131,8 @@ async def _cached_forecast(db: Database, user: Row, w: Weather) -> Forecast | No
 async def post_forecast(w: Weather, user: Row | None = Depends(auth.current_user), db: Database = Depends(get_db)):
     if user and (hit := await _cached_forecast(db, user, w)):
         hit.checkin = await _today_checkin(db, user, w)
+        if not w.day:
+            await friends.note_presence(db, user.id, w, hit.score, hit.label, hit.outfit)
         return hit
     history = await account.recent_checkins(db, user.id) if user else []
     prefs = account.prefs_of(await account.get_prefs(db, user.id)) if user else None
@@ -145,5 +149,7 @@ async def post_forecast(w: Weather, user: Row | None = Depends(auth.current_user
                          f.model, utcnow())
     f.forecastId = row.id
     f.checkin = await _today_checkin(db, user, w)
+    if user and not w.day:  # they're out on their friends' streets today (tomorrow's look-ahead doesn't count)
+        await friends.note_presence(db, user.id, w, f.score, f.label, f.outfit)
     log.info('jev %s · %s · %s %s · %dms%s', f.model, w.city, f.score, f.label, f.ms, f' · {len(history)} check-ins' if history else '')
     return f

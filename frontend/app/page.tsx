@@ -16,6 +16,7 @@ import Thrift, { thriftSnugAt, type ThriftTop } from '../components/Thrift';
 import Boutique, { boutiqueSnugAt, type MaisonPiece } from '../components/Boutique';
 import Airport, { airportSnugAt } from '../components/Airport';
 import Drive, { Fade, type Dest } from '../components/Drive';
+import Street, { FriendsPark, makeCard, parkSnugAt } from '../components/Street';
 import { maisonDrop, seasonAt, thriftRack, thriftTheme, thriftWeek } from '../lib/closet';
 import LocationSearch, { type Place } from '../components/LocationSearch';
 import { api, SignIn, type User } from '../components/auth';
@@ -243,6 +244,16 @@ export default function Home() {
   const [driving, setDriving] = useState<{ from: number } | null>(null);
   const [jump, setJump] = useState<{ page: number; key: number } | null>(null);
   const [homeward, setHomeward] = useState(false); // fading straight home from a place snug drove to
+  // a friend's link (?f=code): add them once signed in (kept through signing in), then tidy the address
+  useEffect(() => {
+    const url = new URL(window.location.href), code = url.searchParams.get('f');
+    if (code) { try { localStorage.setItem('snug-friend', code); } catch { /* private mode */ } url.searchParams.delete('f'); history.replaceState(null, '', url.toString()); }
+    if (!user) return;
+    let pending: string | null = null;
+    try { pending = localStorage.getItem('snug-friend'); } catch { /* private mode */ }
+    if (!pending) return;
+    api('/friends/add', { code: pending }).catch(() => {}).finally(() => { try { localStorage.removeItem('snug-friend'); } catch { /* private mode */ } });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const m = () => setPhone(window.innerWidth < 760); m(); window.addEventListener('resize', m); return () => window.removeEventListener('resize', m); }, []);
   const poofed = usePoofed();
 
@@ -286,10 +297,11 @@ export default function Home() {
   });
 
   // where the car's GPS can take snug: home, tomorrow's chair (phones), the shops, the airport (the world's pages)
-  const hasChair = phone && !!tomorrow && !morning, shop0 = hasChair ? 2 : 1;
+  const hasChair = phone && !!tomorrow && !morning, park = hasChair ? 2 : 1, shop0 = park + 1;
   const dests: Dest[] = [
     { page: 0, label: 'home', icon: 'home' },
     ...(hasChair && tomorrow ? [{ page: 1, label: `${tomorrowWord(tomorrow)}'s outfit`, icon: 'chair' } as Dest] : []),
+    { page: park, label: 'your friends', icon: 'park' },
     { page: shop0, label: 'hand-me-snugs', icon: 'thrift' }, { page: shop0 + 1, label: 'maison snugé', icon: 'boutique' }, { page: shop0 + 2, label: 'the airport', icon: 'plane' },
   ];
 
@@ -314,8 +326,9 @@ export default function Home() {
       {jamming && <Jam />}
       {/* further along snug's world: tomorrow's chair (phones), then the thrift store; past the first stop, by car */}
       {showApp && done && thrift && (
-        <World ready={poofed} today={weather?.outfit} driveFrom={phone && tomorrow && !morning ? 1 : 0} onDrive={from => setDriving({ from })} jump={jump} onHome={() => setHomeward(true)} pages={[
+        <World ready={poofed} today={weather?.outfit} driveFrom={phone && tomorrow && !morning ? 1 : 0} onDrive={from => setDriving({ from })} jump={jump} onHome={() => setHomeward(true)} home={user ? c => <Street c={c} card={() => makeCard(weather?.outfit, user?.name)} /> : undefined} pages={[
           ...(phone && tomorrow && !morning ? [{ key: 'chair', label: tomorrowWord(tomorrow), snugAt: chairSnugAt, render: c => <ChairPage ctx={c} {...chairProps(tomorrow)} /> } as WorldPage] : []),
+          { key: 'park', label: 'friends', snugAt: parkSnugAt, render: c => <FriendsPark ctx={c} feeling={weather?.label} me={{ outfit: weather?.outfit, condition: weather?.condition, night: !!(weather?.night || weather?.dark) }} /> },
           { key: 'thrift', label: 'thrift', snugAt: thriftSnugAt, render: c => (
             <Thrift ctx={c} rack={thrift.rack} theme={thrift.theme} nextDays={thrift.next} avatar={(prefs?.avatar ?? {}) as Avatar} today={weather?.outfit} owned={owned} wind={weather?.wind} onTake={takeHome} />
           ) },

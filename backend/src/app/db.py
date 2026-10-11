@@ -23,7 +23,7 @@ MIGRATIONS = ROOT / 'migrations'
 
 JSON_COLS = {'tuning', 'avatar', 'curve', 'outfit', 'weather', 'a', 'b'}
 TIME_COLS = {'created_at', 'last_seen_at', 'expires_at', 'updated_at'}
-BOOL_COLS = {'onboarded'}
+BOOL_COLS = {'onboarded', 'hide_city', 'night', 'seen', 'discarded'}
 
 
 def utcnow() -> datetime:
@@ -104,6 +104,9 @@ class Local(Database):
             if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'").fetchone():
                 for f in sorted(MIGRATIONS.glob('*.sql')):
                     conn.executescript(f.read_text())
+            # later migrations on an older local file (they only create what isn't there yet)
+            for f in sorted(MIGRATIONS.glob('*.sql'))[1:]:
+                conn.executescript(f.read_text())
             Local._ready = True
         return conn
 

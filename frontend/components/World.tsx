@@ -17,6 +17,8 @@ export interface PageCtx {
   /** Draw snug as something else while it's here (trying a piece on, say); null for its usual standing self. */
   setSnug: (src: string | null) => void;
 }
+/** Snug's own street (the first screen), for things living on it: where the ground is, and whether snug's home. */
+export interface HomeCtx { u: number; pw: number; ph: number; head: number; ground: number; avLeft: number; here: boolean }
 /** A place further along the world: what its arrow says, where snug stands there (its sprite's left edge), and what's there. */
 export interface WorldPage { key: string; label: string; snugAt: (c: PageCtx) => number; render: (c: PageCtx) => ReactNode }
 
@@ -61,7 +63,7 @@ export function ArrowSign({ text, dir }: { text: string; dir: 'left' | 'right' }
  * there until you come back, when it walks home and goes back to what it was doing.
  * The places' skies and hills are copies of the first screen's, joined so the seams don't show.
  */
-export default function World({ pages, today, ready, driveFrom, onDrive, jump, onHome }: {
+export default function World({ pages, today, ready, driveFrom, onDrive, jump, onHome, home }: {
   pages: WorldPage[]; today?: Outfit; ready: boolean;
   /** from this page on, the way further is by car: its sign says "head out" and calls onDrive(page) instead of walking on */
   driveFrom?: number; onDrive?: (from: number) => void;
@@ -69,6 +71,8 @@ export default function World({ pages, today, ready, driveFrom, onDrive, jump, o
   jump?: { page: number; key: number } | null;
   /** back from a place snug drove to: straight home (the page fades it), not a walk back along the street */
   onHome?: () => void;
+  /** what lives on snug's own street (friends walking by, the mailbox), panning away with it */
+  home?: (c: HomeCtx) => ReactNode;
 }) {
   const [av, setAv] = useState<HTMLElement | null>(null);
   const [box, setBox] = useState<{ u: number; pw: number; ph: number; head: number; ground: number; avLeft: number } | null>(null);
@@ -201,6 +205,11 @@ export default function World({ pages, today, ready, driveFrom, onDrive, jump, o
       <button onClick={() => (drives(0) ? onDrive!(0) : go(1))} aria-label={drives(0) ? 'head out' : pages[0].label} style={{ position: 'absolute', right: 10, top: arrowTop, zIndex: 20, translate: `${-page * pw}px 0`, transition: snap ? 'none' : `translate ${WALK}s cubic-bezier(.45,0,.3,1)` }}>
         <span style={{ display: 'block', animation: 'snug-pop .45s cubic-bezier(.3,1.4,.5,1) both, snug-nudge-x 1.8s .5s ease-in-out infinite' }}><ArrowSign text={drives(0) ? 'head out' : pages[0].label} dir="right" /></span>
       </button>
+    )}
+    {home && (
+      <div data-home style={{ position: 'absolute', left: 0, top: 0, width: pw, height: ph, zIndex: 2, pointerEvents: 'none', translate: `${-page * pw}px 0`, transition: snap ? 'none' : `translate ${WALK}s cubic-bezier(.45,0,.3,1)` }}>
+        {home({ u: box.u, pw, ph, head: box.head, ground: box.ground, avLeft: box.avLeft, here: page === 0 && arrived === 0 })}
+      </div>
     )}
     <div data-world>
       <style>{`@keyframes snug-waddle{0%,100%{rotate:0deg;margin-top:0}25%{rotate:-4deg;margin-top:-4px}50%{rotate:0deg;margin-top:0}75%{rotate:4deg;margin-top:-4px}}

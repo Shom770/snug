@@ -10,12 +10,13 @@
 	"routes": [{ "pattern": "snugsky.com", "custom_domain": true }],
 	"workers_dev": true,
 	// the Next.js site, exported as static files (npm run build). Everything is served from here,
-	// except /backend/*, which runs the Python Worker (FastAPI).
+	// except /backend/*, which runs the Python Worker (FastAPI), and /f/* (friend links, with their previews).
 	"assets": {
 		"directory": "../frontend/out",
 		"not_found_handling": "404-page",
 		"run_worker_first": [
-			"/backend/*"
+			"/backend/*",
+			"/f/*"
 		]
 	},
 	// people, sessions, preferences, forecasts, tune picks, check-ins (the code reads it as env.DB)
