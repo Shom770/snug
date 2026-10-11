@@ -153,3 +153,69 @@ async def recent_checkins(db: Database, user_id: str, limit: int = 6) -> list[tu
 
 async def get_prefs(db: Database, user_id: str) -> Row | None:
     return await db.first('SELECT * FROM preferences WHERE user_id = ?', user_id)
+
+
+Day = Annotated[str, StringConstraints(pattern=r'^\d{4}-\d{2}-\d{2}$')]
+
+
+class TripIn(BaseModel):
+    place: Place
+    start: Day
+    end: Day
+
+
+class TripTick(BaseModel):
+    today: Day  # their local date
+
+
+class TripMoved(BaseModel):
+    changed: bool  # their place just switched (to the trip's city, or back)
+    prefs: Prefs
+
+
+@router.put('/me/trip', status_code=204)
+async def book_trip(body: TripIn, user: Row = Depends(require_user), db: Database = Depends(get_db)):
+    """Booking at the airport. A new booking replaces the last; if they're away on that one, where they came from
+    carries over, so they still go back there in the end."""
+    if body.end < body.start:
+        raise HTTPException(422, 'the trip ends before it starts')
+    was = await db.first('SELECT * FROM trips WHERE user_id = ?', user.id)
+    home = (was.home_name, was.home_lat, was.home_lon) if was and was.state == 'away' else (None, None, None)
+    await db.run('INSERT INTO trips (user_id, place_name, lat, lon, start_date, end_date, home_name, home_lat, home_lon, state, created_at) '
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'booked', ?) ON CONFLICT (user_id) DO UPDATE SET place_name = excluded.place_name, "
+                 'lat = excluded.lat, lon = excluded.lon, start_date = excluded.start_date, end_date = excluded.end_date, '
+                 'home_name = excluded.home_name, home_lat = excluded.home_lat, home_lon = excluded.home_lon, state = excluded.state, '
+                 'created_at = excluded.created_at',
+                 user.id, body.place.name, body.place.lat, body.place.lon, body.start, body.end, *home, utcnow())
+
+
+def _same_place(p: Row | None, name: str, lat: float, lon: float) -> bool:
+    return bool(p and p.lat is not None and p.lon is not None and (p.place_name == name or (abs(p.lat - lat) < 0.05 and abs(p.lon - lon) < 0.05)))
+
+
+async def _move(db: Database, user_id: str, name: str, lat: float, lon: float):
+    await db.run("INSERT OR IGNORE INTO preferences (user_id, units, onboarded, updated_at) VALUES (?, '°F', 0, ?)", user_id, utcnow())
+    await db.run('UPDATE preferences SET place_name = ?, lat = ?, lon = ?, updated_at = ? WHERE user_id = ?', name, lat, lon, utcnow(), user_id)
+
+
+@router.post('/me/trip/tick', response_model=TripMoved)
+async def trip_tick(body: TripTick, user: Row = Depends(require_user), db: Database = Depends(get_db)):
+    """Checked when the app opens (and now and then while it's open). Each switch happens once, never forced again:
+    on the trip's first day their place becomes the trip's city; after its last day it goes back to where they were,
+    unless they've already moved it somewhere else themselves."""
+    t, changed = await db.first('SELECT * FROM trips WHERE user_id = ?', user.id), False
+    if t and t.state in ('booked', 'away'):
+        p = await get_prefs(db, user.id)
+        if t.state == 'booked' and t.start_date <= body.today <= t.end_date:
+            home = (t.home_name, t.home_lat, t.home_lon) if t.home_name else (p.place_name, p.lat, p.lon) if p else (None, None, None)
+            await db.run("UPDATE trips SET state = 'away', home_name = ?, home_lat = ?, home_lon = ? WHERE user_id = ?", *home, user.id)
+            if not _same_place(p, t.place_name, t.lat, t.lon):
+                await _move(db, user.id, t.place_name, t.lat, t.lon)
+                changed = True
+        elif body.today > t.end_date:
+            if t.state == 'away' and t.home_name and t.home_lat is not None and _same_place(p, t.place_name, t.lat, t.lon):
+                await _move(db, user.id, t.home_name, t.home_lat, t.home_lon)
+                changed = True
+            await db.run("UPDATE trips SET state = 'done' WHERE user_id = ?", user.id)
+    return TripMoved(changed=changed, prefs=prefs_of(await get_prefs(db, user.id)))
+

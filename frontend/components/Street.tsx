@@ -169,11 +169,14 @@ function Feed({ posts, onPosted, onClose, pw, ph, feeling, me }: { posts: Post[]
   const SCREEN = '#efe7d4';
   return (
     <div style={{ position: 'absolute', left: (pw - W) / 2, top: Math.max(16, (ph - H) / 2), width: W, height: H, fontFamily: FONT, animation: 'st-pop .35s cubic-bezier(.3,1.4,.5,1) both', filter: 'drop-shadow(0 6px 0 rgba(20,10,4,0.3))' }}>
+      {/* close: a chunky pixel button on the phone's corner, easy to hit with a thumb */}
+      <button onClick={onClose} aria-label="close" style={{ position: 'absolute', right: -12, top: -12, zIndex: 1, width: 40, height: 40, padding: 3, background: INK, clipPath: CP2 }}>
+        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', background: TAG, clipPath: CP2, boxShadow: 'inset 0 -3px 0 #e2d2ad', color: INK, fontSize: 24, fontWeight: 800, lineHeight: 1 }}>×</span>
+      </button>
       <div style={{ position: 'absolute', inset: 0, padding: 4, background: INK, clipPath: CP6 }}>
         <div style={{ position: 'relative', height: '100%', padding: '22px 9px 30px', background: '#3a3f4a', clipPath: CP6, boxShadow: 'inset 3px 3px 0 #555c69' }}>
           <span aria-hidden style={{ position: 'absolute', left: '50%', top: 9, width: 44, height: 5, marginLeft: -22, background: INK }} />
           <span aria-hidden style={{ position: 'absolute', left: '50%', bottom: 7, width: 16, height: 16, marginLeft: -8, background: '#2b2f3a', boxShadow: `0 0 0 3px ${INK}` }} />
-          <button onClick={onClose} aria-label="close" style={{ position: 'absolute', right: 12, top: 3, color: '#c4cad3', fontSize: 17, fontWeight: 800 }}>×</button>
           <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', background: SCREEN, clipPath: CP2, boxShadow: `inset 0 0 0 3px ${INK}` }}>
             {/* you: face, today's feeling, what's up */}
             <div style={{ padding: '12px 12px 11px', background: '#fffaf0', boxShadow: `inset 0 -3px 0 ${INK}` }}>

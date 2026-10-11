@@ -28,6 +28,7 @@ const Snug = dynamic(() => import('../components/Snug'), { ssr: false });
 // A forecast we've already seen this hour skips it: snug just poofs in (Snug's `quick`).
 const MIN_LOADING_MS = 3600;
 const hourKey = () => { const d = new Date(); return `${d.toDateString()} ${d.getHours()}`; };
+const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 // used when someone skips the "where are you" step
 const FALLBACK_PLACE: Place = { name: 'Philadelphia, PA', lat: 39.9526, lon: -75.1652 };
 
@@ -116,6 +117,15 @@ export default function Home() {
   };
   useEffect(() => { api<Me>('/me').then(arrive, () => setMe({ user: null, prefs: null })); }, []);
 
+  // a trip booked at the airport: on its first day their place switches to the trip's city, and back after it ends
+  // (each just once, so changing it back by hand sticks)
+  const tickedDay = useRef(''); // the day the trip was last checked: once a day is plenty (and right after booking)
+  const tripTick = () => {
+    tickedDay.current = localDay();
+    api<{ changed: boolean; prefs: Prefs }>('/me/trip/tick', { today: tickedDay.current })
+      .then(r => { if (r.changed) setMe(m => (m ? { ...m, prefs: r.prefs } : m)); })
+      .catch(() => { tickedDay.current = ''; });
+  };
   const savePrefs = (body: Partial<Prefs>) => api<Prefs>('/me/prefs', body, 'PUT').then(p => { setMe(m => (m ? { ...m, prefs: p } : m)); return p; });
 
   // welcome -> signed in: returning people go straight to their forecast, new ones pick a place
@@ -188,7 +198,9 @@ export default function Home() {
   // view (a computer) checks each minute, so it moves on with the hour too.
   useEffect(() => {
     if (!showApp) return;
+    tripTick();
     const check = () => {
+      if (document.visibilityState === 'visible' && tickedDay.current !== localDay()) tripTick();
       if (document.visibilityState === 'visible' && loadedHour.current && loadedHour.current !== hourKey()) {
         loadedHour.current = '';
         setRefresh(r => r + 1);
@@ -335,7 +347,7 @@ export default function Home() {
           { key: 'boutique', label: 'boutique', snugAt: boutiqueSnugAt, render: c => (
             <Boutique ctx={c} pieces={thrift.maison.pieces} extras={thrift.maison.extras} season={thrift.season} avatar={(prefs?.avatar ?? {}) as Avatar} today={weather?.outfit} owned={owned} onTake={takeHome} />
           ) },
-          { key: 'airport', label: 'airport', snugAt: airportSnugAt, crowded: c => c.pw < 760, render: c => <Airport ctx={c} avatar={(prefs?.avatar ?? {}) as Avatar} home={place} units={prefs?.units} outfit={weather?.outfit} /> },
+          { key: 'airport', label: 'airport', snugAt: airportSnugAt, crowded: c => c.pw < 760, render: c => <Airport ctx={c} avatar={(prefs?.avatar ?? {}) as Avatar} home={place} units={prefs?.units} outfit={weather?.outfit} onBooked={tripTick} /> },
         ]} />
       )}
       {homeward && <Fade onMid={() => setJump({ page: 0, key: Date.now() })} onDone={() => setHomeward(false)} />}

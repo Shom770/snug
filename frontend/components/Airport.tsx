@@ -502,7 +502,7 @@ export const airportSnugAt = (c: PageCtx) => Math.round(layout(c).snugX);
  * the places flipping round on it), pick the days you'll be there, and it prints your boarding pass; then snug's
  * suitcase goes through the x-ray, packed with what it'll wear there, day by day, from its own closet.
  */
-export default function Airport({ ctx, avatar, home, units, outfit }: { ctx: PageCtx; avatar: Avatar; home: Place; units?: '°F' | '°C'; outfit?: Outfit }) {
+export default function Airport({ ctx, avatar, home, units, outfit, onBooked }: { ctx: PageCtx; avatar: Avatar; home: Place; units?: '°F' | '°C'; outfit?: Outfit; onBooked?: () => void }) {
   const L = layout(ctx), { s, flip } = L;
   const pad = L.phone ? 10 : 14, tw = Math.floor((L.boardW - 2 * pad - 4 - (N - 1) * 2) / (N + 1.3)), th = Math.round(tw * 1.3);
   const [q, setQ] = useState('');
@@ -589,7 +589,11 @@ export default function Airport({ ctx, avatar, home, units, outfit }: { ctx: Pag
   useEffect(() => {
     if (phase === 'want' && trip) setPhase('print');
     if (phase === 'want' && err) setPhase('dates');
-    if (phase === 'print') later(1900, () => setPhase('in'));
+    if (phase === 'print') {
+      later(1900, () => setPhase('in'));
+      // booked: on its first day their place becomes this city (and goes back after), unless they change it themselves
+      if (dest && range) api('/me/trip', { place: { name: dest.name, lat: dest.lat, lon: dest.lon }, start: range[0], end: range[1] }, 'PUT').then(() => onBooked?.()).catch(() => {});
+    }
     if (phase === 'in') later(1300, () => setPhase('scan'));
     if (phase === 'scan') later(400 + (1.4 + packed.length * 0.12) * 1000 + 900, () => setPhase('out'));
     if (phase === 'out') later(1300, () => { setPhase('done'); setShownTag(true); });
