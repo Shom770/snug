@@ -29,7 +29,7 @@ from .db import Database, Row, get_db, utcnow
 from .descriptors import band_of
 from .forecast import forecast, no_rain_gear
 from .location import Location, LocationNotFound, resolve, reverse, search
-from .models import Forecast, Outfit, TodayCheckin, Weather
+from .models import Earlier, Forecast, Outfit, TodayCheckin, Weather, Why
 from .net import http
 from .trip import MAX_DAYS, Trip, trip
 from .weather import get_weather
@@ -124,13 +124,31 @@ async def _cached_forecast(db: Database, user: Row, w: Weather) -> Forecast | No
     if newer or tuned:  # they told us something new since; ask again
         return None
     return Forecast(score=row.score, curve=row.curve, startHour=row.start_hour, label=row.label, band=band_of(row.score), factor=row.factor,
-                    outfit=no_rain_gear(Outfit(**row.outfit), w), model=row.model, ms=0, forecastId=row.id, personalized=True, cached=True)
+                    outfit=no_rain_gear(Outfit(**row.outfit), w), model=row.model, ms=0, forecastId=row.id, personalized=True, cached=True,
+                    why=await _why_of(db, row.id))
+
+
+async def _why_of(db: Database, forecast_id: int) -> Why | None:
+    r = await db.first('SELECT why FROM forecast_why WHERE forecast_id = ?', forecast_id)
+    return Why(**r.why) if r else None
+
+
+async def _earlier(db: Database, user: Row, w: Weather, before: int) -> Earlier | None:
+    """The forecast before this one today, here: how it rated the same hours (scores move as the weather does)."""
+    row = await db.first('SELECT id, created_at, start_hour, curve FROM forecasts WHERE user_id = ? AND city = ? AND local_date = ? AND id < ? '
+                         'AND start_hour <= ? ORDER BY id DESC LIMIT 1', user.id, w.city, w.time[:10], before, w.hour)
+    if not row:
+        return None
+    why = await _why_of(db, row.id)
+    return Earlier(made=row.created_at.isoformat() + 'Z', startHour=row.start_hour, curve=row.curve, hours=why.hours if why else None)
 
 
 @app.post('/forecast', response_model=Forecast)
 async def post_forecast(w: Weather, user: Row | None = Depends(auth.current_user), db: Database = Depends(get_db)):
     if user and (hit := await _cached_forecast(db, user, w)):
         hit.checkin = await _today_checkin(db, user, w)
+        if not w.day:
+            hit.earlier = await _earlier(db, user, w, hit.forecastId)
         if not w.day:
             await friends.note_presence(db, user.id, w, hit.score, hit.label, hit.outfit)
         return hit
@@ -148,6 +166,10 @@ async def post_forecast(w: Weather, user: Row | None = Depends(auth.current_user
                          {k: getattr(w, k) for k in ('condition', 'temp', 'feels', 'wind', 'gust', 'humidity', 'clouds', 'pop', 'lo', 'hi', 'hour')},
                          f.model, utcnow())
     f.forecastId = row.id
+    if f.why:
+        await db.run('INSERT OR REPLACE INTO forecast_why (forecast_id, why) VALUES (?, ?)', row.id, f.why.model_dump())
+    if user and not w.day:
+        f.earlier = await _earlier(db, user, w, row.id)
     f.checkin = await _today_checkin(db, user, w)
     if user and not w.day:  # they're out on their friends' streets today (tomorrow's look-ahead doesn't count)
         await friends.note_presence(db, user.id, w, f.score, f.label, f.outfit)

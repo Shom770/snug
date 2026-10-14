@@ -63,6 +63,40 @@ class Weather(HourWeather):
     source: Literal['nws', 'open-meteo'] = 'open-meteo'
 
 
+class WhyHour(BaseModel):
+    """What went into one hour's comfort score."""
+    hour: int
+    score: int  # what it came to, 1-100
+    level: float  # Jev's expected comfort level, 0 (dangerous) to 9 (perfect); score = 1 + level / 9 * 99, then capped
+    probs: list[float]  # Jev's vote for each comfort level
+    confidence: float
+    cap: int | None = None  # the most a rainy hour can score, when it held this one down
+    sky: str
+    temp: float
+    feels: float
+    humidity: float
+    wind: float
+    gust: float
+    clouds: float
+    sun: float  # % of the sun hidden by cloud
+    pop: float  # chance of rain, %
+    precip: float  # inches
+
+
+class Why(BaseModel):
+    levels: list[str]  # the comfort levels Jev picks between, worst first
+    hours: list[WhyHour]
+    about: list[str]  # what Jev was told about this person
+
+
+class Earlier(BaseModel):
+    """The forecast before this one today (it may have rated these hours differently)."""
+    made: str  # ISO, UTC
+    startHour: int
+    curve: list[int]
+    hours: list[WhyHour] | None = None
+
+
 class Forecast(BaseModel):
     score: int  # comfort right now, 1-100
     curve: list[int]  # comfort for each of the next 12 hours, curve[0] == score
@@ -77,6 +111,8 @@ class Forecast(BaseModel):
     personalized: bool = False  # the person's past check-ins were part of the question
     cached: bool = False  # reused this hour's forecast instead of asking Jev again
     checkin: 'TodayCheckin | None' = None  # tonight's check-in for this place, if they've done it
+    why: Why | None = None  # the numbers behind each hour's score
+    earlier: Earlier | None = None
 
 
 class TodayCheckin(BaseModel):

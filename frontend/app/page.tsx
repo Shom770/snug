@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import AccountMenu from '../components/AccountMenu';
 import SignOutTag from '../components/SignOutTag';
 import AdjustPanel from '../components/AdjustPanel';
+import WhyPanel, { type Earlier, type WhyData } from '../components/Why';
 import CharacterPanel, { type Avatar } from '../components/CharacterPanel';
 import ShopPanel from '../components/ShopPanel';
 import ShopNudge from '../components/ShopNudge';
@@ -36,7 +37,7 @@ interface Tuning { ideal: number; windAvoid: number; cloudAvoid: number }
 interface Prefs { place: Place | null; units: '°F' | '°C'; onboarded: boolean; tuning: Tuning | null; avatar: Avatar | null }
 interface Me { user: User | null; prefs: Prefs | null }
 interface Checkin { felt: number; fit: string | null }
-interface Forecast { forecastId: number | null; score: number; curve: number[]; startHour: number; label: string; outfit: Outfit; checkin: Checkin | null; cached: boolean }
+interface Forecast { forecastId: number | null; score: number; curve: number[]; startHour: number; label: string; outfit: Outfit; checkin: Checkin | null; cached: boolean; why?: WhyData | null; earlier?: Earlier | null }
 // the next day's outfit, folded on a chair next to snug in the evening
 interface Tomorrow { date: string; outfit: Outfit; label: string; curve: number[]; startHour: number; hi: number; lo: number }
 
@@ -87,6 +88,8 @@ export default function Home() {
   const [done, setDone] = useState(false);
   const [quick, setQuick] = useState(false); // the forecast showing was one we already had: reveal it with just a poof
   const [adjusting, setAdjusting] = useState(false);
+  const [why, setWhy] = useState<{ why: WhyData; earlier: Earlier | null } | null>(null); // the numbers behind this hour's scores
+  const [whyAt, setWhyAt] = useState<number | null>(null); // open, at this hour (0 = now)
   // 'onboard': girl or boy, between picking a place and tuning; 'edit': skin, girl/boy, hair, from the 📍 menu
   const [character, setCharacter] = useState<'onboard' | 'edit' | null>(null);
   const [shopping, setShopping] = useState<false | 'shop' | 'closet'>(false);
@@ -178,6 +181,7 @@ export default function Home() {
           if (!same) setWeather(shown);
           setForecastId(f.forecastId);
           setCheckin(f.checkin);
+          setWhy(f.why ? { why: f.why, earlier: f.earlier ?? null } : null);
           if (!seen) setQuick(f.cached);
           setDone(true);
           loadedHour.current = hourKey();
@@ -320,13 +324,14 @@ export default function Home() {
   if (!me) return <div style={{ minHeight: '100vh', background: '#f3ede1' }} />;
   return (
     <div style={{ position: 'relative' }}>
-      <Snug weather={showApp ? weather : undefined} units={prefs?.units} city={place.name.split(',')[0].toLowerCase()} loading={!done} quick={quick} checkin={checkin} avatar={prefs?.avatar} onShop={openShop} onCloset={openCloset}
+      <Snug weather={showApp ? weather : undefined} onWhy={why ? setWhyAt : undefined} units={prefs?.units} city={place.name.split(',')[0].toLowerCase()} loading={!done} quick={quick} checkin={checkin} avatar={prefs?.avatar} onShop={openShop} onCloset={openCloset}
         showApp={showApp} loginGoto={goto} placeSet={!!prefs?.place} onFinishLogin={onFinishLogin} onCheckin={onCheckin} />
       {!showApp && authSlot && createPortal(<SignIn user={user} onUser={signedIn} onContinue={() => step(prefs?.place ? 2 : 1)} onSignOut={signOut} />, authSlot)}
       {!showApp && locSlot && createPortal(<LocationSearch onPick={p => savePrefs({ place: p }).then(() => setCharacter('onboard'), console.error)} />, locSlot)}
       {showApp && user && (
         <div style={{ position: 'absolute', left: 16, top: 0, zIndex: 6 }}>
-          <AccountMenu place={place} onPlace={p => savePrefs({ place: p }).catch(console.error)} onEditSnug={() => setCharacter('edit')} onShop={openShop} />
+          <AccountMenu place={place} onPlace={p => savePrefs({ place: p }).catch(console.error)} onEditSnug={() => setCharacter('edit')} onShop={openShop}
+            more={phone ? { onAdjust: () => setAdjusting(true), onSignOut: signOut, email: user.email } : undefined} />
         </div>
       )}
       {showApp && user && done && <SignOutTag user={user} onSignOut={signOut} onAdjust={() => setAdjusting(true)} />}
@@ -363,6 +368,7 @@ export default function Home() {
       )}
       {shopping && <ShopPanel initial={prefs?.avatar} closetFirst={shopping === 'closet'} onClose={() => setShopping(false)}
         onDone={a => { savePrefs({ avatar: a }).catch(console.error); setShopping(false); }} />}
+      {why && whyAt != null && <WhyPanel why={why.why} earlier={why.earlier} start={whyAt} units={prefs?.units} onClose={() => setWhyAt(null)} />}
       {adjusting && <AdjustPanel onClose={changed => { setAdjusting(false); if (changed) setRefresh(r => r + 1); }} />}
     </div>
   );

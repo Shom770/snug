@@ -62,7 +62,8 @@ export default function SignOutTag({ user, onSignOut, onAdjust }: { user: User; 
     return () => ro.disconnect();
   }, [board]);
 
-  if (!board?.parentElement || !pos || !landed) return null;
+  // (on a phone they're in the place menu instead: the top of a small screen is crowded enough)
+  if (!board?.parentElement || !pos || !landed || narrow) return null;
   const signOut = <Hang label="sign out" title={`signed in as ${user.email}`} onClick={onSignOut} ropeW={54} />;
   return createPortal(
     <div data-follow style={{ position: 'absolute', right: pos.right, top: pos.top, transform: 'translateX(50%)', translate: shift.translate, transition: shift.transition, zIndex: 2, perspective: 500, pointerEvents: 'none', fontFamily: "'Rethink Sans',sans-serif" }}>

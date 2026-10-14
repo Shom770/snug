@@ -13,7 +13,7 @@ import httpx
 from . import jev
 from .descriptors import describe
 from .db import Row
-from .models import Forecast, HourWeather, Outfit, Weather
+from .models import Forecast, HourWeather, Outfit, Weather, Why, WhyHour
 from .weather import sun_cover
 
 # 10 levels (Jev's max). The expected level 0..9 maps onto a 1-100 comfort score.
@@ -100,6 +100,21 @@ def _cap(h: HourWeather) -> int:
     return 100
 
 
+def _leanings(rows: list[tuple[Row, Row]]) -> list[str]:
+    """Which way their check-ins lean the answers."""
+    if not rows:
+        return []
+    delta = round(mean(c.felt - f.score for c, f in rows))
+    advice = [f'rate comfort about {abs(delta)} {"higher" if delta > 0 else "lower"} for them than for a typical person'] if abs(delta) >= 5 else []
+    fits = [c.fit for c, _ in rows if c.fit]
+    cold, warm = fits.count('too cold'), fits.count('too warm')
+    if cold > warm:
+        advice.append(f'they ran cold in their outfit {cold} of {len(fits)} times, so dress them warmer')
+    elif warm > cold:
+        advice.append(f'they ran warm in their outfit {warm} of {len(fits)} times, so dress them lighter')
+    return advice
+
+
 def _history(rows: list[tuple[Row, Row]]) -> str:
     """The person's recent check-ins as a small table, so Jev can lean the answers toward how they actually feel."""
     if not rows:
@@ -111,14 +126,7 @@ def _history(rows: list[tuple[Row, Row]]) -> str:
         lines.append(f"{datetime.fromisoformat(c.local_date):%b %-d} {w['condition']} {round(w['feels'])} {round(w['wind'])} {round(w['humidity'])} "
                      f"{f.score} {c.felt} {outfit} {(c.fit or '-').replace(' ', '_')}")
     # spell out which way to lean; left to infer it from the table, Jev sometimes reads "too warm" as "worse"
-    delta = round(mean(c.felt - f.score for c, f in rows))
-    advice = [f'rate comfort about {abs(delta)} {"higher" if delta > 0 else "lower"} for them than for a typical person'] if abs(delta) >= 5 else []
-    fits = [c.fit for c, _ in rows if c.fit]
-    cold, warm = fits.count('too cold'), fits.count('too warm')
-    if cold > warm:
-        advice.append(f'they ran cold in their outfit {cold} of {len(fits)} times, so dress them warmer')
-    elif warm > cold:
-        advice.append(f'they ran warm in their outfit {warm} of {len(fits)} times, so dress them lighter')
+    advice = _leanings(rows)
     return ('\nAnswer for one person. Their past check-ins (our forecast vs how it actually felt to them, 1-100; how the outfit worked):\n'
             'date sky feels°F wind_mph humidity% forecast felt outfit fit\n' + '\n'.join(lines) +
             (f"\nFor this person: {'; '.join(advice)}." if advice else ''))
@@ -129,11 +137,11 @@ def _history(rows: list[tuple[Row, Row]]) -> str:
 QUEUE = 6
 
 
-def _tuning(t: dict | None, checkins: int = 0) -> str:
-    """What they told us in onboarding ("which day feels better"), weighted by how much of the queue it still holds."""
+def _quiz(t: dict | None, checkins: int = 0) -> tuple[list[str], int]:
+    """What they told us in onboarding, and how many of the queue's slots it still holds."""
     left = QUEUE - min(QUEUE, checkins)
     if not t or not left:
-        return ''
+        return [], 0
     bits = [f"they're happiest around {round(t['ideal'])}°F"]
     if t['windAvoid'] > 3:
         bits.append('wind bothers them more than most')
@@ -143,6 +151,14 @@ def _tuning(t: dict | None, checkins: int = 0) -> str:
         bits.append('grey skies bring them down')
     elif t['cloudAvoid'] < -15:
         bits.append("they're happy under clouds")
+    return bits, left
+
+
+def _tuning(t: dict | None, checkins: int = 0) -> str:
+    """What they told us in onboarding ("which day feels better"), weighted by how much of the queue it still holds."""
+    bits, left = _quiz(t, checkins)
+    if not bits:
+        return ''
     weight = '' if left == QUEUE else f' (from their signup quiz; now {left} of {QUEUE} signals, their check-ins below count for the rest)'
     return f"\nThis person told us{weight}: {'; '.join(bits)}."
 
@@ -164,7 +180,9 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     model, a = await jev.decide(client, _state(w) + _tuning(tuning, len(history or [])) + tuned + _history(history or []), qs)
 
     top = len(COMFORT) - 1
-    curve = [max(1, min(100, _cap(h), round(1 + jev.score(a[f'h{i}']) / top * 99))) for i, h in enumerate(w.hourly)]
+    raw = [round(1 + jev.score(a[f'h{i}']) / top * 99) for i in range(len(w.hourly))]
+    curve = [max(1, min(100, _cap(h), r)) for h, r in zip(w.hourly, raw)]
+    why = _why(w, a, raw, curve, history or [], tuning, tuned)
     curve += [curve[-1]] * (12 - len(curve))
     _, top_, layer = WARMTH[max(0, min(len(WARMTH) - 1, round(jev.score(a['warmth']))))]
     if jev.yes(a.get('rain')) and layer != 'coat' and rains(w):
@@ -186,5 +204,24 @@ async def forecast(client: httpx.AsyncClient, w: Weather, history: list[tuple[Ro
     # the sun-hiding cloud, as the scene draws it
     label, band, factor = describe(jev.choice(a.get('factor'), FACTORS, 'none'), curve[0], w.hour, w.night,
                                    datetime.fromisoformat(w.time).toordinal(), cover=sun_cover(w), golden=w.golden)
-    return Forecast(score=curve[0], curve=curve, startHour=w.hour, label=label, band=band, factor=factor,
+    return Forecast(score=curve[0], curve=curve, startHour=w.hour, label=label, band=band, factor=factor, why=why,
                     outfit=outfit, model=model, ms=round((time.perf_counter() - t0) * 1000), personalized=bool(history or tuning or tuned))
+
+
+def _why(w: Weather, a: dict, raw: list[int], curve: list[int], history: list[tuple[Row, Row]], tuning: dict | None, tuned: str) -> Why:
+    """The numbers behind each hour: Jev's vote across the comfort levels, any rain cap, the hour's weather, and what Jev
+    was told about this person."""
+    hours = []
+    for i, h in enumerate(w.hourly):
+        ans = a[f'h{i}']
+        p = ans.get('probabilities') or {}
+        probs = [round(float(p.get(str(k), p.get(lv, 0)) or 0), 3) for k, lv in enumerate(COMFORT)]
+        hours.append(WhyHour(hour=h.hour, score=curve[i], level=round(jev.score(ans), 2), probs=probs, confidence=round(float(ans.get('confidence') or 0), 2),
+                             cap=_cap(h) if curve[i] < raw[i] else None, sky=h.condition, temp=round(h.temp), feels=round(h.feels),
+                             humidity=round(h.humidity), wind=round(h.wind), gust=round(h.gust), clouds=round(h.clouds),
+                             sun=round(sun_cover(h)), pop=round(h.pop), precip=round(h.precip, 2)))
+    quiz, left = _quiz(tuning, len(history))
+    about = [f'signup quiz ({left} of {QUEUE} signals): {b}' for b in quiz]
+    about += [f'from your {len(history)} check-ins: {b}' for b in _leanings(history)]
+    about += [f'from your picks: {line[2:]}' for line in tuned.splitlines() if line.startswith('- ')]
+    return Why(levels=COMFORT, hours=hours, about=about)

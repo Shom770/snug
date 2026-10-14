@@ -38,6 +38,8 @@ export interface SnugProps {
   placeSet?: boolean;
   /** onboarding finished; receives the tuning summary from the which-day-feels-better picks (null if skipped) */
   onFinishLogin?: (tuning: { ideal: number; windAvoid: number; cloudAvoid: number } | null) => void;
+  /** opens what went into the score for an hour (0 = now, or whichever hour is picked on the curve) */
+  onWhy?: (hour: number) => void;
 }
 
 // The logic class is generated from the design (lib/engine.ts) and stays untyped.
@@ -68,6 +70,11 @@ export default class Snug extends Base {
       (this as any).state = { ...saved, preset: '__input', night: !!preset.night, intensity: preset.intensity || null };
       try { v = baseRender(); } finally { (this as any).state = saved; }
     } else v = baseRender();
+    // a small "why 84?" by the date: what went into the score
+    if (w && this.props.onWhy && w.curve?.length) {
+      const sel = Math.max(0, Math.min(w.curve.length - 1, Number(v.selI) || 0));
+      v = { ...v, whyOn: true, whyText: `why ${w.curve[sel]}${sel ? ` at ${(((w.hour ?? 0) + sel) % 12) || 12}${((w.hour ?? 0) + sel) % 24 < 12 ? 'am' : 'pm'}` : ''}?`, openWhy: () => this.props.onWhy?.(sel) };
+    }
     return v;
   }
 

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LOCAL_DB = ROOT / 'snug.db'
 MIGRATIONS = ROOT / 'migrations'
 
-JSON_COLS = {'tuning', 'avatar', 'curve', 'outfit', 'weather', 'a', 'b'}
+JSON_COLS = {'tuning', 'avatar', 'curve', 'outfit', 'weather', 'a', 'b', 'why'}
 TIME_COLS = {'created_at', 'last_seen_at', 'expires_at', 'updated_at'}
 BOOL_COLS = {'onboarded', 'hide_city', 'night', 'seen', 'discarded'}
 

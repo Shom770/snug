@@ -436,13 +436,6 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
       <div aria-hidden style={{ position: 'absolute', left: phone ? ctx.pw * 0.08 : ctx.pw * 0.24, top: ctx.ground - 30 * bench - 6 * ctx.u }}>
         <Pix rows={LAMP} pal={{ o: INK, m: '#3a3f4a', g: '#fff2c8' }} size={bench} />
       </div>
-      {friends && !list.length && (
-        <div style={{ position: 'absolute', left: phone ? ctx.pw / 2 - 110 : ctx.pw * 0.55 - 120, top: ctx.ground - 150, width: phone ? 220 : 240, textAlign: 'center' }}>
-          <span style={{ display: 'inline-block', padding: 4, background: '#4a2e16', clipPath: CP }}>
-            <span style={{ display: 'block', padding: '8px 14px', background: WOOD, clipPath: CP, color: '#fff1d2', fontSize: 14, fontWeight: 800, textShadow: `2px 2px 0 #4a2e16`, lineHeight: 1.3 }}>friends who open snug today hang out here</span>
-          </span>
-        </div>
-      )}
       {list.map((f, i) => {
         // on a phone they stand along the front, below snug and the portal, so nobody's hidden
         const x = slots[i] - w / 2, feet = phone ? Math.min(ctx.ground + 150, ctx.ph - 24) - (i % 2) * 8 : ctx.ground - (2 + (i % 2) * 3) * ctx.u;
@@ -460,7 +453,8 @@ export function FriendsPark({ ctx, feeling, me }: { ctx: PageCtx; feeling?: stri
                 <span style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}><Face p={now} size={Math.round(ps * 12)} /></span>
               </span>
             )}
-            <ArcText top={now ? now.name : "what's everyone"} bottom={now ? `feeling ${(now.mood ?? 'okay').toLowerCase()}` : 'feeling?'} size={42 * ps} />
+            {/* (and when nobody's been by, it says so) */}
+            <ArcText top={now ? now.name : friends ? 'no friends out' : "what's everyone"} bottom={now ? `feeling ${(now.mood ?? 'okay').toLowerCase()}` : friends ? 'today yet' : 'feeling?'} size={42 * ps} />
           </span>
         </span>
       </button>
