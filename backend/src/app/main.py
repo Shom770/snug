@@ -123,9 +123,11 @@ async def _cached_forecast(db: Database, user: Row, w: Weather) -> Forecast | No
     tuned = await db.first('SELECT id FROM tune_picks WHERE user_id = ? AND created_at > ? LIMIT 1', user.id, row.created_at)
     if newer or tuned:  # they told us something new since; ask again
         return None
+    why = await _why_of(db, row.id)
+    if not why:  # from before forecasts kept their numbers; ask again so "why 84?" has something to show
+        return None
     return Forecast(score=row.score, curve=row.curve, startHour=row.start_hour, label=row.label, band=band_of(row.score), factor=row.factor,
-                    outfit=no_rain_gear(Outfit(**row.outfit), w), model=row.model, ms=0, forecastId=row.id, personalized=True, cached=True,
-                    why=await _why_of(db, row.id))
+                    outfit=no_rain_gear(Outfit(**row.outfit), w), model=row.model, ms=0, forecastId=row.id, personalized=True, cached=True, why=why)
 
 
 async def _why_of(db: Database, forecast_id: int) -> Why | None:
